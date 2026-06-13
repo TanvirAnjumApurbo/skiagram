@@ -104,7 +104,8 @@ expression: session
       "sidechain": false,
       "content_summary": null,
       "content_chars": 109,
-      "has_thinking": false
+      "has_thinking": false,
+      "tool_use_id": "toolu_fix_01"
     },
     {
       "kind": "Assistant",
@@ -153,7 +154,8 @@ expression: session
       "sidechain": false,
       "content_summary": null,
       "content_chars": 119,
-      "has_thinking": false
+      "has_thinking": false,
+      "tool_use_id": "toolu_fix_03"
     },
     {
       "kind": "Assistant",
@@ -172,6 +174,7 @@ expression: session
       "sidechain": false,
       "content_summary": "Added /health with tests.",
       "content_chars": 1683,
+      "thinking_chars": 1658,
       "has_thinking": true
     },
     {

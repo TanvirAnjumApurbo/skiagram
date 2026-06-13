@@ -279,7 +279,11 @@ mod tests {
             sidechain: false,
             content_summary: None,
             content_chars: 0,
+            thinking_chars: 0,
             has_thinking: false,
+            tool_use_id: None,
+            attachment_kind: None,
+            item_count: 0,
         }
     }
 

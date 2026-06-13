@@ -3,6 +3,7 @@
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use tokscope_core::analysis::aggregate::{aggregate, Filter};
+use tokscope_core::model::Session;
 use tokscope_core::{adapters, analysis::aggregate::Summary};
 
 #[derive(Parser)]
@@ -35,6 +36,13 @@ pub enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Context-window breakdown: startup overhead, by-source, by-MCP-server,
+    /// and the heaviest individual contributors (CLAUDE.md §2.2 / v0.2).
+    Context {
+        /// Emit machine-readable JSON instead of tables.
+        #[arg(long)]
+        json: bool,
+    },
     /// Interactive session browser (arrow keys / j k, q to quit).
     Tui,
 }
@@ -56,21 +64,38 @@ pub fn run() -> anyhow::Result<()> {
         })?,
     };
 
-    let summary = collect(adapter.as_ref(), cli.since)?;
-
     match cli.command.unwrap_or(Command::Summary { json: false }) {
-        Command::Summary { json: true } => crate::render::json::print(&summary)?,
-        Command::Summary { json: false } => crate::render::table::print(&summary),
-        Command::Tui => crate::tui::run(&summary)?,
+        Command::Summary { json } => {
+            let summary = collect(adapter.as_ref(), cli.since)?;
+            if json {
+                crate::render::json::print(&summary)?;
+            } else {
+                crate::render::table::print(&summary);
+            }
+        }
+        Command::Context { json } => {
+            let (sessions, _failed) = collect_sessions(adapter.as_ref())?;
+            let report =
+                tokscope_core::analysis::context::profile(&sessions, adapter.id(), cli.since);
+            if json {
+                crate::render::json::print(&report)?;
+            } else {
+                crate::render::table::print_context(&report);
+            }
+        }
+        Command::Tui => {
+            let summary = collect(adapter.as_ref(), cli.since)?;
+            crate::tui::run(&summary)?;
+        }
     }
     Ok(())
 }
 
-/// Discover -> parse (leniently) -> dedup + aggregate.
-fn collect(
-    adapter: &dyn adapters::Adapter,
-    since: Option<jiff::civil::Date>,
-) -> anyhow::Result<Summary> {
+/// Discover -> parse (leniently) all of an adapter's session files.
+///
+/// One unreadable file must not kill the report (CLAUDE.md §12): failures are
+/// counted and logged, not propagated.
+fn collect_sessions(adapter: &dyn adapters::Adapter) -> anyhow::Result<(Vec<Session>, u64)> {
     let refs = adapter
         .discover()
         .with_context(|| format!("discovering {} sessions", adapter.id()))?;
@@ -81,12 +106,20 @@ fn collect(
         match adapter.parse(r) {
             Ok(s) => sessions.push(s),
             Err(e) => {
-                // One unreadable file must not kill the report (CLAUDE.md §12).
                 failed += 1;
                 tracing::warn!("failed to parse {}: {e:#}", r.path.display());
             }
         }
     }
+    Ok((sessions, failed))
+}
+
+/// Discover -> parse (leniently) -> dedup + aggregate.
+fn collect(
+    adapter: &dyn adapters::Adapter,
+    since: Option<jiff::civil::Date>,
+) -> anyhow::Result<Summary> {
+    let (sessions, failed) = collect_sessions(adapter)?;
     Ok(aggregate(
         &sessions,
         &Filter { since },

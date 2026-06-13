@@ -22,8 +22,13 @@
 //!   thinking length is not always measurable from the transcript.
 //! - Bookkeeping line types carrying no spend (VERIFIED on real files): `summary`,
 //!   `mode`, `permission-mode`, `last-prompt`, `file-history-snapshot`,
-//!   `attachment`, `ai-title`, `custom-title`, `queue-operation`, `agent-name` —
-//!   ignored without counting as "skipped" so the skip stat means *unexpected*.
+//!   `ai-title`, `custom-title`, `queue-operation`, `agent-name` — ignored without
+//!   counting as "skipped" so the skip stat means *unexpected*.
+//! - `attachment` lines (deferred-tool/skill listings, MCP instruction blocks,
+//!   IDE/file context, reminders) carry no spend but ARE kept as
+//!   `EventKind::Attachment` events — their category/size feed `analysis::context`
+//!   (verified `attachment.type` ∈ {deferred_tools_delta, skill_listing,
+//!   mcp_instructions_delta, task_reminder, file, …}).
 //! - TODO(verify): compaction markers (`subtype: "compact_boundary"` system lines,
 //!   `isCompactSummary` user lines) were not present in sampled files; the mapping
 //!   below is best-effort from documentation.
@@ -139,19 +144,21 @@ impl Adapter for ClaudeCode {
                 Some("assistant") => push_assistant(raw, &mut session, &mut model_counts),
                 Some("user") => push_user(raw, &mut session),
                 Some("system") => push_system(raw, &mut session),
+                // Non-message context injected into the window — kept as Attachment
+                // events for context-bloat attribution (deferred-tool/skill listings,
+                // MCP instruction blocks, IDE/file context, reminders).
+                Some("attachment") => push_attachment(raw, &mut session),
                 // Bookkeeping lines that carry no token spend. VERIFIED present in
                 // real v2.1.162 files: ai-title / custom-title (session titles),
                 // queue-operation (message-queue ops), agent-name (sub-agent label),
-                // attachment (deferred_tools / skill listings), file-history-snapshot,
-                // mode, permission-mode, last-prompt. Kept `queued-message`/`progress`
-                // from older builds defensively.
+                // file-history-snapshot, mode, permission-mode, last-prompt. Kept
+                // `queued-message`/`progress` from older builds defensively.
                 Some(
                     "summary"
                     | "mode"
                     | "permission-mode"
                     | "last-prompt"
                     | "file-history-snapshot"
-                    | "attachment"
                     | "ai-title"
                     | "custom-title"
                     | "queue-operation"
@@ -235,6 +242,7 @@ fn push_assistant(raw: RawLine, session: &mut Session, model_counts: &mut BTreeM
     let mut tool_calls = Vec::new();
     let mut spawns = Vec::new();
     let mut content_chars = 0u64;
+    let mut thinking_chars = 0u64;
     let mut has_thinking = false;
     let mut summary = None;
 
@@ -251,7 +259,9 @@ fn push_assistant(raw: RawLine, session: &mut Session, model_counts: &mut BTreeM
                 Some("thinking") => {
                     has_thinking = true;
                     let text = block.get("thinking").and_then(|t| t.as_str()).unwrap_or("");
-                    content_chars += text.chars().count() as u64;
+                    let n = text.chars().count() as u64;
+                    content_chars += n;
+                    thinking_chars += n;
                 }
                 Some("redacted_thinking") => has_thinking = true,
                 Some("tool_use") => {
@@ -315,7 +325,11 @@ fn push_assistant(raw: RawLine, session: &mut Session, model_counts: &mut BTreeM
         sidechain: raw.is_sidechain,
         content_summary: summary,
         content_chars,
+        thinking_chars,
         has_thinking,
+        tool_use_id: None,
+        attachment_kind: None,
+        item_count: 0,
     });
     for spawn in spawns {
         session.events.push(Event {
@@ -328,7 +342,11 @@ fn push_assistant(raw: RawLine, session: &mut Session, model_counts: &mut BTreeM
             sidechain: raw.is_sidechain,
             content_summary: spawn.description.clone(),
             content_chars: 0,
+            thinking_chars: 0,
             has_thinking: false,
+            tool_use_id: None,
+            attachment_kind: None,
+            item_count: 0,
         });
         session.sub_agents.push(spawn);
     }
@@ -343,6 +361,9 @@ fn push_user(raw: RawLine, session: &mut Session) {
     };
     let mut summary = None;
     let mut content_chars = 0u64;
+    // For tool-result lines: the id of the tool_use this answers, so the result's
+    // weight can be attributed to the originating tool/MCP server (context attr.).
+    let mut tool_use_id = None;
 
     match raw.message.as_ref().map(|m| &m.content) {
         Some(serde_json::Value::String(text)) => {
@@ -350,11 +371,15 @@ fn push_user(raw: RawLine, session: &mut Session) {
             summary = snippet(text);
         }
         Some(value @ serde_json::Value::Array(blocks)) => {
-            let is_tool_result = blocks
+            let tool_result = blocks
                 .iter()
-                .any(|b| b.get("type").and_then(|t| t.as_str()) == Some("tool_result"));
-            if is_tool_result {
+                .find(|b| b.get("type").and_then(|t| t.as_str()) == Some("tool_result"));
+            if let Some(tr) = tool_result {
                 kind = EventKind::ToolResult;
+                tool_use_id = tr
+                    .get("tool_use_id")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string);
                 // Serialized result size = what this result weighs in the context
                 // window (incl. base64 images) — input for context-bloat analysis.
                 content_chars = value.to_string().len() as u64;
@@ -382,7 +407,11 @@ fn push_user(raw: RawLine, session: &mut Session) {
         sidechain: raw.is_sidechain,
         content_summary: summary,
         content_chars,
+        thinking_chars: 0,
         has_thinking: false,
+        tool_use_id,
+        attachment_kind: None,
+        item_count: 0,
     });
 }
 
@@ -405,7 +434,67 @@ fn push_system(raw: RawLine, session: &mut Session) {
             .content
             .as_deref()
             .map_or(0, |c| c.chars().count() as u64),
+        thinking_chars: 0,
         has_thinking: false,
+        tool_use_id: None,
+        attachment_kind: None,
+        item_count: 0,
+    });
+}
+
+/// `attachment` lines inject non-message content into the window (deferred-tool
+/// listings, skill listings, MCP-server instruction blocks, IDE/file context,
+/// reminders). They carry no token usage, but their *category*, *item count*, and
+/// *byte weight* feed context-bloat attribution (`analysis::context`).
+///
+/// VERIFIED shapes (v2.1.x): `attachment.type` ∈ {deferred_tools_delta,
+/// skill_listing, mcp_instructions_delta, task_reminder, file, opened_file_in_ide,
+/// selected_lines_in_ide, queued_command, date_change, compact_file_reference, …}.
+/// `addedNames`/`names` list the items; weight lives in `addedLines` (tool names),
+/// `content` (skill listing) or `addedBlocks` (MCP instructions).
+fn push_attachment(raw: RawLine, session: &mut Session) {
+    let Some(att) = raw.attachment else {
+        // Shape we don't recognize — count it so format drift stays visible.
+        session.skipped_lines += 1;
+        return;
+    };
+    // Named-item count: prefer the explicit list, fall back to skill count.
+    let item_count = att
+        .added_names
+        .as_ref()
+        .map(|v| v.len() as u64)
+        .or_else(|| att.names.as_ref().map(|v| v.len() as u64))
+        .or(att.skill_count)
+        .unwrap_or(0);
+    // Byte weight added to the window: whichever payload field is present.
+    let content_chars = att
+        .content
+        .as_deref()
+        .map_or(0, |c| c.chars().count() as u64)
+        + att
+            .added_lines
+            .as_ref()
+            .map_or(0, |v| v.iter().map(|s| s.chars().count() as u64).sum())
+        + att
+            .added_blocks
+            .as_ref()
+            .map_or(0, |b| b.to_string().chars().count() as u64);
+
+    session.events.push(Event {
+        kind: EventKind::Attachment,
+        ts: parse_ts(&raw.timestamp),
+        request_id: None,
+        model: None,
+        usage: None,
+        tool_calls: Vec::new(),
+        sidechain: raw.is_sidechain,
+        content_summary: att.kind.clone(),
+        content_chars,
+        thinking_chars: 0,
+        has_thinking: false,
+        tool_use_id: None,
+        attachment_kind: att.kind,
+        item_count,
     });
 }
 
@@ -428,6 +517,30 @@ struct RawLine {
     /// Top-level content on `system` lines.
     content: Option<String>,
     message: Option<RawMessage>,
+    /// Payload on `attachment` lines.
+    attachment: Option<RawAttachment>,
+}
+
+/// `attachment` line payload (lenient: fields vary by `type`).
+#[derive(Deserialize)]
+struct RawAttachment {
+    #[serde(rename = "type")]
+    kind: Option<String>,
+    /// Names of items added (deferred tools, MCP servers); also `names` on some.
+    #[serde(rename = "addedNames")]
+    added_names: Option<Vec<serde_json::Value>>,
+    names: Option<Vec<serde_json::Value>>,
+    /// Per-item text (e.g. tool names) added to the window.
+    #[serde(rename = "addedLines")]
+    added_lines: Option<Vec<String>>,
+    /// Skill-listing body text.
+    content: Option<String>,
+    /// Skill-listing item count.
+    #[serde(rename = "skillCount")]
+    skill_count: Option<u64>,
+    /// MCP-server instruction blocks added to the window.
+    #[serde(rename = "addedBlocks")]
+    added_blocks: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize)]

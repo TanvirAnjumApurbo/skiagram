@@ -3,6 +3,7 @@
 use comfy_table::{presets::UTF8_FULL_CONDENSED, Cell, CellAlignment, ContentArrangement, Table};
 use owo_colors::{OwoColorize, Stream};
 use tokscope_core::analysis::aggregate::{Rollup, Summary};
+use tokscope_core::analysis::context::{ContextReport, ContextSource, SessionContext};
 
 use super::{fmt_cost, fmt_count};
 
@@ -255,4 +256,231 @@ fn warnings(summary: &Summary) {
 
 fn short_id(id: &str) -> String {
     id.chars().take(8).collect()
+}
+
+// ---------------------------------------------------------------------------
+// `tokscope context` — context-bloat attribution (CLAUDE.md §2.2 / v0.2).
+// ---------------------------------------------------------------------------
+
+/// Print a [`ContextReport`]. Two kinds of number, kept visually distinct
+/// (CLAUDE.md §8): **measured** real cache/usage tokens vs. **estimated**
+/// (`~`-prefixed) shares of on-disk transcript content — the latter are
+/// never billed and exist only to show *relative* composition.
+pub fn print_context(report: &ContextReport) {
+    let since = report
+        .since
+        .map(|d| format!(" · since {d} (UTC)"))
+        .unwrap_or_default();
+    println!(
+        "{} context — {} · {} session(s) profiled{}",
+        "tokscope".if_supports_color(Stream::Stdout, |t| t.bold()),
+        report.agent,
+        report.sessions_profiled,
+        since
+    );
+    println!(
+        "MEASURED from cache tokens (real, billed) · ESTIMATED splits from transcript content \
+         (≈chars/4, never billed)\n"
+    );
+
+    if report.sessions_profiled == 0 {
+        println!("no sessions found — nothing to report.");
+        return;
+    }
+
+    context_overhead(report);
+    by_source(report);
+    by_server(report);
+    heaviest(report);
+    inventory(report);
+    top_sessions_by_peak(report);
+}
+
+/// "?" for unmeasurable (`None`) — absence ≠ zero, never render as 0 (§8.5).
+fn opt_count(value: Option<u64>) -> String {
+    match value {
+        Some(v) => fmt_count(v),
+        None => "?".into(),
+    }
+}
+
+/// `~1,234` — an ESTIMATED token figure, never billed.
+fn est_count(tokens: u64) -> String {
+    format!("~{}", fmt_count(tokens))
+}
+
+fn pct(share: f64) -> String {
+    format!("{:.1}%", share * 100.0)
+}
+
+fn source_label(source: ContextSource) -> &'static str {
+    match source {
+        ContextSource::UserPrompts => "User prompts",
+        ContextSource::AssistantText => "Assistant text",
+        ContextSource::Thinking => "Thinking",
+        ContextSource::ToolCalls => "Tool calls",
+        ContextSource::ToolResults => "Tool results",
+        ContextSource::Attachments => "Attachments",
+    }
+}
+
+fn truncate(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        let mut out: String = s.chars().take(max.saturating_sub(1)).collect();
+        out.push('…');
+        out
+    }
+}
+
+fn context_overhead(report: &ContextReport) {
+    section("CONTEXT OVERHEAD (measured)");
+    match &report.max_startup_overhead {
+        Some((id, tokens)) => println!(
+            "startup overhead: {} tokens (session {}) — system prompt + tool defs + memory + \
+             first turn, sitting in the window before you type",
+            fmt_count(*tokens),
+            short_id(id)
+        ),
+        None => println!(
+            "startup overhead: ? (no cold-start session found — every session resumed warm)"
+        ),
+    }
+
+    let peak = report
+        .sessions
+        .iter()
+        .filter_map(|s| s.peak_input_tokens)
+        .max();
+    match peak {
+        Some(tokens) => println!(
+            "peak window fill: {} tokens — the fullest the context window got in any session",
+            fmt_count(tokens)
+        ),
+        None => println!("peak window fill: ? (no usage data found)"),
+    }
+}
+
+fn by_source(report: &ContextReport) {
+    section("BY SOURCE (estimated share of transcript content)");
+    if report.by_source.is_empty() {
+        println!("(no transcript content found)");
+        return;
+    }
+    let mut t = base_table(&["Source", "Est. tokens", "Share"]);
+    for sb in &report.by_source {
+        t.add_row(vec![
+            Cell::new(source_label(sb.source)),
+            num(est_count(sb.est_tokens)),
+            num(pct(sb.share)),
+        ]);
+    }
+    println!("{t}");
+}
+
+fn by_server(report: &ContextReport) {
+    section("BY MCP SERVER (estimated)");
+    if report.by_server.is_empty() {
+        println!("(no tool calls found)");
+        return;
+    }
+    let mut t = base_table(&[
+        "Server",
+        "Calls",
+        "Call chars",
+        "Result chars",
+        "Total est. tokens",
+    ]);
+    for sb in &report.by_server {
+        t.add_row(vec![
+            Cell::new(&sb.server),
+            num(fmt_count(sb.calls)),
+            num(fmt_count(sb.call_chars)),
+            num(fmt_count(sb.result_chars)),
+            num(est_count(sb.est_tokens)),
+        ]);
+    }
+    println!("{t}");
+}
+
+fn heaviest(report: &ContextReport) {
+    section("HEAVIEST CONTEXT ITEMS (estimated)");
+    if report.heaviest.is_empty() {
+        println!("(no transcript content found)");
+        return;
+    }
+    let mut t = base_table(&["Source", "Label", "Est. tokens", "Session"]);
+    for item in report.heaviest.iter().take(10) {
+        t.add_row(vec![
+            Cell::new(source_label(item.source)),
+            Cell::new(truncate(item.label.as_deref().unwrap_or("-"), 40)),
+            num(est_count(item.est_tokens)),
+            Cell::new(short_id(&item.session_id)),
+        ]);
+    }
+    println!("{t}");
+}
+
+fn inventory(report: &ContextReport) {
+    section("INVENTORY");
+    println!(
+        "MCP servers in use: {}",
+        if report.mcp_servers.is_empty() {
+            "(none)".to_string()
+        } else {
+            report.mcp_servers.join(", ")
+        }
+    );
+    println!(
+        "deferred tools (available but NOT loaded — not bloat): {}",
+        fmt_count(report.deferred_tools)
+    );
+    println!("skills listed: {}", fmt_count(report.skills_listed));
+    println!(
+        "MCP instruction blocks: {} chars",
+        fmt_count(report.mcp_instruction_chars)
+    );
+    println!(
+        "attachment content (deferred-tool/skill listings, MCP instructions, IDE/file context, \
+         reminders): {} chars",
+        fmt_count(report.attachment_chars)
+    );
+    println!(
+        "context compactions: {} (the window filled up that many times)",
+        report.compactions
+    );
+}
+
+fn top_sessions_by_peak(report: &ContextReport) {
+    section("TOP SESSIONS BY PEAK WINDOW");
+    if report.sessions.is_empty() {
+        println!("(no sessions found)");
+        return;
+    }
+    let mut t = base_table(&[
+        "Session",
+        "Project",
+        "Model",
+        "Cold start",
+        "Startup overhead",
+        "Peak",
+        "Final",
+    ]);
+    for s in report.sessions.iter().take(10) {
+        t.add_row(session_context_row(s));
+    }
+    println!("{t}");
+}
+
+fn session_context_row(s: &SessionContext) -> Vec<Cell> {
+    vec![
+        Cell::new(short_id(&s.id)),
+        Cell::new(s.project.as_deref().unwrap_or("?")),
+        Cell::new(s.model.as_deref().unwrap_or("?")),
+        Cell::new(if s.cold_start { "yes" } else { "no" }),
+        num(opt_count(s.startup_overhead_tokens)),
+        num(opt_count(s.peak_input_tokens)),
+        num(opt_count(s.final_input_tokens)),
+    ]
 }

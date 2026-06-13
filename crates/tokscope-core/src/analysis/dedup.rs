@@ -23,12 +23,8 @@ use jiff::civil::Date;
 use jiff::Timestamp;
 use serde::Serialize;
 
-use crate::analysis::utc_date;
+use crate::analysis::{utc_date, EST_CHARS_PER_TOKEN};
 use crate::model::{EventKind, Session, Usage};
-
-/// Rough chars-per-token ratio for English/code. ONLY used for the
-/// thinking-undercount heuristic — never for billing.
-const EST_CHARS_PER_TOKEN: u64 = 4;
 
 /// One deduplicated API request with its finalized usage.
 #[derive(Debug, Clone, Serialize)]
@@ -191,7 +187,11 @@ mod tests {
             sidechain: false,
             content_summary: None,
             content_chars: 0,
+            thinking_chars: 0,
             has_thinking: false,
+            tool_use_id: None,
+            attachment_kind: None,
+            item_count: 0,
         }
     }
 

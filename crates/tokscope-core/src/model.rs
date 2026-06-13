@@ -56,6 +56,11 @@ pub enum EventKind {
     System,
     Compaction,
     SubAgentSpawn,
+    /// Non-message context injected into the window: deferred-tool listings,
+    /// skill listings, MCP-server instruction blocks, IDE/file context, reminders
+    /// (Claude Code `attachment` lines). Carries no token usage; used by
+    /// context-bloat attribution (`analysis::context`).
+    Attachment,
 }
 
 /// One line/turn of a session.
@@ -77,9 +82,32 @@ pub struct Event {
     /// Approximate chars of generated content (text + thinking + tool-call JSON).
     /// Heuristic input for thinking-token reconciliation only — never billed.
     pub content_chars: u64,
+    /// Chars of extended-thinking text in this event — a SUBSET of `content_chars`
+    /// (0 when none, or when the thinking block was encrypted and thus
+    /// unmeasurable). Lets context attribution separate thinking from text.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub thinking_chars: u64,
     /// The event carried thinking blocks (possibly encrypted/redacted, i.e. with
     /// no measurable text).
     pub has_thinking: bool,
+    /// For a `ToolResult` event: the `tool_use_id` it answers. Lets the result's
+    /// bytes be attributed back to the tool / MCP server that produced them
+    /// (the matching `ToolCall` carries the same id in `ToolCall::id`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_use_id: Option<String>,
+    /// For an `Attachment` event: its category — e.g. `"deferred_tools_delta"`,
+    /// `"skill_listing"`, `"mcp_instructions_delta"`, `"task_reminder"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attachment_kind: Option<String>,
+    /// For an `Attachment` event: how many named items it added to the window
+    /// (deferred tools, skills, MCP servers). 0 elsewhere.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub item_count: u64,
+}
+
+/// `serde(skip_serializing_if)` predicate: keeps zero counters out of JSON/snapshots.
+fn is_zero(n: &u64) -> bool {
+    *n == 0
 }
 
 /// Token usage as reported by the agent.

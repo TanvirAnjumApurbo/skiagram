@@ -12,6 +12,7 @@ leaves your machine**.
 ```
 $ tokscope            # spend summary (auto-detects your agent)
 $ tokscope tui        # interactive session browser
+$ tokscope context    # what's filling your context window, and why
 $ tokscope summary --json --since 2026-06-01
 ```
 
@@ -55,6 +56,7 @@ Single static binary, no runtime, no daemon, no network.
 ```
 tokscope [summary] [--agent <id>] [--since YYYY-MM-DD]   # plain tables (default)
 tokscope summary --json                                   # machine-readable
+tokscope context [--json]                                 # context-window breakdown
 tokscope tui                                              # interactive browser
 ```
 
@@ -91,6 +93,29 @@ sub-agent share: 1,300 tokens across 1 request(s) ($0.0087) — attributed to pa
 - **Sub-agents:** transcripts under `<session>/subagents/` are parsed and folded into the
   parent session's row.
 - **Estimates, not invoices.** Costs come from public pricing and are labeled as estimates.
+
+## Context: what's filling your window?
+
+```
+tokscope context             # plain-table context-window breakdown
+tokscope context --json      # machine-readable
+```
+
+Two kinds of number, kept strictly apart:
+
+- **MEASURED** (real, billed tokens, from cache accounting): the **startup overhead** —
+  system prompt + tool definitions + memory/CLAUDE.md + your first turn — that's already
+  sitting in the window on a fresh session before you type anything, and the **peak/final
+  window fill** across your sessions.
+- **ESTIMATED** (`~`-prefixed, from on-disk transcript sizes ÷ 4 chars/token, *never*
+  billed): the relative composition **by source** (user prompts, assistant text, thinking,
+  tool calls/results, attachments), **by MCP server** (which server's tool calls + results
+  eat the most window), and the **heaviest individual items** — the context "fat tail"
+  where one giant tool result can dominate.
+
+Plus an exact **inventory**: which MCP servers are in play, how many tools were *deferred*
+(available but not loaded — so they don't bloat the window, a common misconception), how
+many skills were listed, and how many times the context filled up and got compacted.
 
 ## Supported agents
 

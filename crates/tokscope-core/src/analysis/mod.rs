@@ -16,3 +16,13 @@ use jiff::{tz::TimeZone, Timestamp};
 pub(crate) fn utc_date(ts: Timestamp) -> Date {
     ts.to_zoned(TimeZone::UTC).date()
 }
+
+/// Rough chars-per-token ratio for English/code. ONLY used for heuristics and
+/// the context-bloat ESTIMATE — NEVER for billing (billing always uses the
+/// agent-reported token counts; CLAUDE.md §8.7).
+pub(crate) const EST_CHARS_PER_TOKEN: u64 = 4;
+
+/// Estimate tokens from a char count. Estimate only — never a billed figure.
+pub(crate) fn est_tokens(chars: u64) -> u64 {
+    chars / EST_CHARS_PER_TOKEN
+}
