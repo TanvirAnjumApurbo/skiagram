@@ -1,0 +1,4 @@
+* text=auto
+# Fixtures and snapshots are byte-compared by tests; never CRLF-convert them.
+*.jsonl text eol=lf
+*.snap text eol=lf

@@ -1,0 +1,47 @@
+---
+source: crates/tokscope-core/tests/claude_code_snapshot.rs
+expression: session
+---
+{
+  "id": "agent-fix0001",
+  "agent": "claude-code",
+  "project": "-home-dev-acme-app",
+  "model": "claude-sonnet-4-5-20250929",
+  "parent_session": "3e9d2c41-7b5a-4f2e-9c1d-2f6b8a1c0e11",
+  "started_at": "2026-06-01T10:01:05Z",
+  "ended_at": "2026-06-01T10:01:30Z",
+  "events": [
+    {
+      "kind": "User",
+      "ts": "2026-06-01T10:01:05Z",
+      "request_id": null,
+      "model": null,
+      "usage": null,
+      "sidechain": true,
+      "content_summary": "Audit error handling in routes. (synthetic)",
+      "content_chars": 43,
+      "has_thinking": false
+    },
+    {
+      "kind": "Assistant",
+      "ts": "2026-06-01T10:01:30Z",
+      "request_id": "req_fixture_003",
+      "model": "claude-sonnet-4-5-20250929",
+      "usage": {
+        "input": 900,
+        "output": 400,
+        "cache_creation": 0,
+        "cache_creation_5m": 0,
+        "cache_creation_1h": 0,
+        "cache_read": 0,
+        "thinking": null
+      },
+      "sidechain": true,
+      "content_summary": "Reviewed routes. Two bare except blocks found. (synthetic)",
+      "content_chars": 58,
+      "has_thinking": false
+    }
+  ],
+  "sub_agents": [],
+  "skipped_lines": 0
+}

@@ -1,0 +1,15 @@
+# Rust
+/target
+**/*.rs.bk
+
+# Toolchain + cargo home relocated into the project dir (off the nearly-full C:).
+# These are large, machine-local, and must never be committed.
+/.cargo/
+/.rustup/
+
+# insta pending snapshots (accepted snapshots ARE committed)
+*.pending-snap
+
+# OS noise
+.DS_Store
+Thumbs.db

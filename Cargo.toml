@@ -1,0 +1,44 @@
+# tokscope workspace — see CLAUDE.md for architecture and correctness rules.
+
+[workspace]
+resolver = "2"
+members = ["crates/tokscope-core", "crates/tokscope"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+rust-version = "1.85"
+
+[workspace.dependencies]
+tokscope-core = { path = "crates/tokscope-core", version = "0.1.0" }
+
+# Core
+anyhow = "1.0"
+thiserror = "2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+walkdir = "2.5"
+jiff = { version = "0.2", features = ["serde"] }
+tracing = "0.1"
+directories = "6.0"
+
+# Binary (CLI + TUI)
+clap = { version = "4.5", features = ["derive"] }
+ratatui = "0.29" # crossterm backend re-exported as `ratatui::crossterm`
+comfy-table = "7.1"
+owo-colors = { version = "4.1", features = ["supports-colors"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Tests
+insta = { version = "1.41", features = ["json"] }
+assert_cmd = "2.0"
+predicates = "3.1"
+
+# Planned (CLAUDE.md §4) — added when the feature lands, to keep the build lean:
+#   rusqlite (bundled)  -> Cursor adapter (v0.4)
+#   notify              -> live tail (v0.4)
+#   inferno             -> flamegraph SVG export (v0.3)
+#   tiktoken-rs         -> optional re-tokenization (feature-gated)
+#   simd-json           -> optional fast parsing (feature-gated)
+#   toml + directories  -> user config file
