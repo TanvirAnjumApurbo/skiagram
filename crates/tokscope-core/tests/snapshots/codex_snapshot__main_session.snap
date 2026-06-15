@@ -1,0 +1,175 @@
+---
+source: crates/tokscope-core/tests/codex_snapshot.rs
+expression: session
+---
+{
+  "id": "rollout-2026-06-15T10-00-00-1f2e3d4c-5b6a-7980-abcd-ef0123456789",
+  "agent": "codex",
+  "project": "/home/dev/acme-app",
+  "model": "gpt-5.5",
+  "parent_session": null,
+  "started_at": "2026-06-15T10:00:03Z",
+  "ended_at": "2026-06-15T10:00:15Z",
+  "events": [
+    {
+      "kind": "User",
+      "ts": "2026-06-15T10:00:03Z",
+      "request_id": null,
+      "model": null,
+      "usage": null,
+      "sidechain": false,
+      "content_summary": "Add a /health endpoint to the API please. (synthetic fixture)",
+      "content_chars": 61,
+      "has_thinking": false
+    },
+    {
+      "kind": "Assistant",
+      "ts": "2026-06-15T10:00:05Z",
+      "request_id": null,
+      "model": null,
+      "usage": null,
+      "sidechain": false,
+      "content_summary": "I'll add the endpoint. Reading the router first. (synthetic)",
+      "content_chars": 60,
+      "has_thinking": false
+    },
+    {
+      "kind": "Assistant",
+      "ts": "2026-06-15T10:00:06Z",
+      "request_id": null,
+      "model": "gpt-5.5",
+      "usage": {
+        "input": 1000,
+        "output": 150,
+        "cache_creation": null,
+        "cache_creation_5m": null,
+        "cache_creation_1h": null,
+        "cache_read": 0,
+        "thinking": 50
+      },
+      "sidechain": false,
+      "content_summary": null,
+      "content_chars": 0,
+      "has_thinking": true
+    },
+    {
+      "kind": "ToolCall",
+      "ts": "2026-06-15T10:00:07Z",
+      "request_id": null,
+      "model": null,
+      "usage": null,
+      "tool_calls": [
+        {
+          "id": "call_0001",
+          "name": "shell",
+          "input_bytes": 35,
+          "server": null
+        }
+      ],
+      "sidechain": false,
+      "content_summary": null,
+      "content_chars": 35,
+      "has_thinking": false
+    },
+    {
+      "kind": "Assistant",
+      "ts": "2026-06-15T10:00:09Z",
+      "request_id": null,
+      "model": "gpt-5.5",
+      "usage": {
+        "input": 1500,
+        "output": 200,
+        "cache_creation": null,
+        "cache_creation_5m": null,
+        "cache_creation_1h": null,
+        "cache_read": 500,
+        "thinking": 100
+      },
+      "sidechain": false,
+      "content_summary": null,
+      "content_chars": 0,
+      "has_thinking": true
+    },
+    {
+      "kind": "ToolCall",
+      "ts": "2026-06-15T10:00:10Z",
+      "request_id": null,
+      "model": null,
+      "usage": null,
+      "tool_calls": [
+        {
+          "id": "call_0002",
+          "name": "mcp__acme-db__query",
+          "input_bytes": 18,
+          "server": "acme-db"
+        }
+      ],
+      "sidechain": false,
+      "content_summary": null,
+      "content_chars": 18,
+      "has_thinking": false
+    },
+    {
+      "kind": "ToolCall",
+      "ts": "2026-06-15T10:00:11Z",
+      "request_id": null,
+      "model": null,
+      "usage": null,
+      "tool_calls": [
+        {
+          "id": "call_0002",
+          "name": "mcp__acme-db__query",
+          "input_bytes": 0,
+          "server": "acme-db"
+        }
+      ],
+      "sidechain": false,
+      "content_summary": null,
+      "content_chars": 0,
+      "has_thinking": false
+    },
+    {
+      "kind": "Assistant",
+      "ts": "2026-06-15T10:00:13Z",
+      "request_id": null,
+      "model": null,
+      "usage": null,
+      "sidechain": false,
+      "content_summary": "Added /health with a test. (synthetic)",
+      "content_chars": 38,
+      "has_thinking": false
+    },
+    {
+      "kind": "Assistant",
+      "ts": "2026-06-15T10:00:14Z",
+      "request_id": null,
+      "model": "gpt-5.5",
+      "usage": {
+        "input": 2000,
+        "output": 500,
+        "cache_creation": null,
+        "cache_creation_5m": null,
+        "cache_creation_1h": null,
+        "cache_read": 1000,
+        "thinking": 0
+      },
+      "sidechain": false,
+      "content_summary": null,
+      "content_chars": 0,
+      "has_thinking": false
+    },
+    {
+      "kind": "Compaction",
+      "ts": "2026-06-15T10:00:15Z",
+      "request_id": null,
+      "model": null,
+      "usage": null,
+      "sidechain": false,
+      "content_summary": "context compacted",
+      "content_chars": 0,
+      "has_thinking": false
+    }
+  ],
+  "sub_agents": [],
+  "skipped_lines": 2
+}
