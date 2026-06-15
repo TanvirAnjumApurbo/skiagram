@@ -1,0 +1,6 @@
+{"timestamp":"2026-06-14T09:00:00.000Z","type":"session_meta","payload":{"id":"2a3b4c5d-6e7f-8091-bcde-f01234567890","timestamp":"2026-06-14T09:00:00.000Z","cwd":"/home/dev/blog","originator":"codex_cli","cli_version":"0.45.0","model_provider":"openai"}}
+{"timestamp":"2026-06-14T09:00:01.000Z","type":"turn_context","payload":{"model":"gpt-5.5-codex","cwd":"/home/dev/blog","workspace_roots":["/home/dev/blog"]}}
+{"timestamp":"2026-06-14T09:00:02.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"text","text":"Fix the typo in the README. (synthetic fixture)"}]}}
+{"timestamp":"2026-06-14T09:00:04.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"text","text":"Fixed the typo. (synthetic)"}]}}
+{"timestamp":"2026-06-14T09:00:05.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":800,"cached_input_tokens":200,"output_tokens":100,"reasoning_output_tokens":0,"total_tokens":900},"last_token_usage":{"input_tokens":800,"cached_input_tokens":200,"output_tokens":100,"reasoning_output_tokens":0,"total_tokens":900}}}}
+{"timestamp":"2026-06-14T09:00:06.000Z","type":"event_msg","payload":{"type":"task_complete"}}

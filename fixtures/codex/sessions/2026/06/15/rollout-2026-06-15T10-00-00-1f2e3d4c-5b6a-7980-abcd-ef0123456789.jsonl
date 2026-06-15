@@ -1,0 +1,18 @@
+{"timestamp":"2026-06-15T10:00:00.000Z","type":"session_meta","payload":{"id":"1f2e3d4c-5b6a-7980-abcd-ef0123456789","timestamp":"2026-06-15T10:00:00.000Z","cwd":"/home/dev/acme-app","originator":"codex_cli","cli_version":"0.45.0","model_provider":"openai","base_instructions":{"text":"You are Codex, a coding assistant. (synthetic fixture)"}}}
+{"timestamp":"2026-06-15T10:00:01.000Z","type":"turn_context","payload":{"model":"gpt-5.5","cwd":"/home/dev/acme-app","workspace_roots":["/home/dev/acme-app"]}}
+{"timestamp":"2026-06-15T10:00:02.000Z","type":"event_msg","payload":{"type":"task_started"}}
+{"timestamp":"2026-06-15T10:00:03.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"text","text":"Add a /health endpoint to the API please. (synthetic fixture)"}]}}
+{"timestamp":"2026-06-15T10:00:05.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"text","text":"I'll add the endpoint. Reading the router first. (synthetic)"}]}}
+{"timestamp":"2026-06-15T10:00:06.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":1000,"cached_input_tokens":0,"output_tokens":200,"reasoning_output_tokens":50,"total_tokens":1200},"last_token_usage":{"input_tokens":1000,"cached_input_tokens":0,"output_tokens":200,"reasoning_output_tokens":50,"total_tokens":1200}}}}
+{"timestamp":"2026-06-15T10:00:07.000Z","type":"response_item","payload":{"type":"function_call","name":"shell","arguments":"{\"command\":[\"cat\",\"src/router.py\"]}","call_id":"call_0001"}}
+{"timestamp":"2026-06-15T10:00:08.000Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_0001","output":"def health():\n    return 'ok'  # synthetic"}}
+{"timestamp":"2026-06-15T10:00:09.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":3000,"cached_input_tokens":500,"output_tokens":500,"reasoning_output_tokens":150,"total_tokens":3500},"last_token_usage":{"input_tokens":2000,"cached_input_tokens":500,"output_tokens":300,"reasoning_output_tokens":100,"total_tokens":2300}}}}
+{"timestamp":"2026-06-15T10:00:10.000Z","type":"response_item","payload":{"type":"function_call","name":"mcp__acme-db__query","arguments":"{\"sql\":\"select 1\"}","call_id":"call_0002"}}
+{"timestamp":"2026-06-15T10:00:11.000Z","type":"event_msg","payload":{"type":"mcp_tool_call_end","invocation":{"server":"acme-db","tool":"query"},"call_id":"call_0002","result":{"rows":1}}}
+{"timestamp":"2026-06-15T10:00:12.000Z","type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"Considering idempotent health probes. (synthetic)"}]}}
+{"timestamp":"2026-06-15T10:00:13.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"text","text":"Added /health with a test. (synthetic)"}]}}
+{"timestamp":"2026-06-15T10:00:14.000Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":6000,"cached_input_tokens":1500,"output_tokens":1000,"reasoning_output_tokens":150,"total_tokens":7000},"last_token_usage":{"input_tokens":3000,"cached_input_tokens":1000,"output_tokens":500,"reasoning_output_tokens":0,"total_tokens":3500}}}}
+{"timestamp":"2026-06-15T10:00:15.000Z","type":"event_msg","payload":{"type":"context_compacted"}}
+{"timestamp":"2026-06-15T10:00:16.000Z","type":"event_msg","payload":{"type":"task_complete"}}
+{"timestamp":"2026-06-15T10:00:17.000Z","type":"response_item","payload":{"type":"message","role":
+{"timestamp":"2026-06-15T10:00:18.000Z","type":"mystery_event","payload":{"unknown":true}}
