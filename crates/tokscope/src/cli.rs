@@ -44,6 +44,13 @@ pub enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Anomalies: the fat-tail requests that dominate spend, plus retry storms
+    /// (rapid request bursts — candidate retry/loop episodes) (CLAUDE.md §6 / v0.3).
+    Anomalies {
+        /// Emit machine-readable JSON instead of tables.
+        #[arg(long)]
+        json: bool,
+    },
     /// Interactive session browser (arrow keys / j k, q to quit).
     Tui,
 }
@@ -82,6 +89,16 @@ pub fn run() -> anyhow::Result<()> {
                 crate::render::json::print(&report)?;
             } else {
                 crate::render::table::print_context(&report);
+            }
+        }
+        Command::Anomalies { json } => {
+            let (sessions, _failed) = collect_sessions(adapter.as_ref())?;
+            let filter = Filter { since: cli.since };
+            let report = tokscope_core::analysis::anomaly::detect(&sessions, &filter, adapter.id());
+            if json {
+                crate::render::json::print(&report)?;
+            } else {
+                crate::render::anomalies::print(&report);
             }
         }
         Command::Tui => {
