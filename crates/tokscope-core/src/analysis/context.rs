@@ -288,6 +288,15 @@ fn tool_call_bytes(event: &crate::model::Event) -> u64 {
 ///   `mcp_instructions_delta` attachments; `mcp_servers` = distinct tool-call
 ///   servers; `compactions` = `Compaction` events.
 pub fn profile(sessions: &[Session], agent: &str, since: Option<Date>) -> ContextReport {
+    let refs: Vec<&Session> = sessions.iter().collect();
+    profile_refs(&refs, agent, since)
+}
+
+/// Same as [`profile`] but over borrowed sessions, so a caller that already holds
+/// `&Session` references (e.g. the drill-down, which profiles one session group at
+/// a time) need not clone whole transcripts. [`profile`] is the thin owned-slice
+/// wrapper.
+pub fn profile_refs(sessions: &[&Session], agent: &str, since: Option<Date>) -> ContextReport {
     let mut session_rows: Vec<SessionContext> = Vec::new();
 
     // Cross-session accumulators.

@@ -5,6 +5,7 @@ pub mod anomaly;
 pub mod classify;
 pub mod context;
 pub mod dedup;
+pub mod drilldown;
 
 use jiff::civil::Date;
 use jiff::{tz::TimeZone, Timestamp};

@@ -1,4 +1,8 @@
-//! Scrollable session list: project, model, tokens, est. cost.
+//! Level 1: scrollable session list — project, model, tokens, est. cost.
+//!
+//! Rows come from the drill-down [`SessionDetail`]s (same folded, sub-agent
+//! inclusive accounting as `summary`); the header totals come from the
+//! [`Summary`]. `Enter` drills into the highlighted session's turns.
 
 use ratatui::layout::{Constraint, Layout};
 use ratatui::style::{Modifier, Style};
@@ -6,10 +10,16 @@ use ratatui::text::Line;
 use ratatui::widgets::{Block, Borders, Paragraph, Row, Table, TableState};
 use ratatui::Frame;
 use tokscope_core::analysis::aggregate::Summary;
+use tokscope_core::analysis::drilldown::SessionDetail;
 
 use crate::render::{fmt_cost, fmt_count};
 
-pub fn draw(frame: &mut Frame, summary: &Summary, state: &mut TableState) {
+pub fn draw(
+    frame: &mut Frame,
+    details: &[SessionDetail],
+    summary: &Summary,
+    state: &mut TableState,
+) {
     let [header_area, body_area, footer_area] = Layout::vertical([
         Constraint::Length(2),
         Constraint::Min(1),
@@ -35,21 +45,21 @@ pub fn draw(frame: &mut Frame, summary: &Summary, state: &mut TableState) {
     ]);
     frame.render_widget(header, header_area);
 
-    if summary.by_session.is_empty() {
+    if details.is_empty() {
         frame.render_widget(
             Paragraph::new("no sessions found").block(Block::default().borders(Borders::ALL)),
             body_area,
         );
     } else {
-        let rows = summary.by_session.iter().map(|s| {
+        let rows = details.iter().map(|d| {
             Row::new(vec![
-                s.project.clone().unwrap_or_else(|| "?".into()),
-                s.id.chars().take(8).collect::<String>(),
-                s.model.clone().unwrap_or_else(|| "?".into()),
-                fmt_count(s.rollup.requests),
-                fmt_count(s.rollup.total_tokens()),
-                fmt_count(s.sub_agents),
-                fmt_cost(s.rollup.cost_usd),
+                d.project.clone().unwrap_or_else(|| "?".into()),
+                d.id.chars().take(8).collect::<String>(),
+                d.model.clone().unwrap_or_else(|| "?".into()),
+                fmt_count(d.rollup.requests),
+                fmt_count(d.rollup.total_tokens()),
+                fmt_count(d.sub_agents),
+                fmt_cost(d.rollup.cost_usd),
             ])
         });
         let table = Table::new(
@@ -83,6 +93,6 @@ pub fn draw(frame: &mut Frame, summary: &Summary, state: &mut TableState) {
     }
 
     let footer =
-        Paragraph::new("↑/↓ or j/k scroll · g/G home/end · Enter drill-down (TODO v0.2) · q quit");
+        Paragraph::new("↑/↓ or j/k scroll · g/G home/end · Enter drill into turns · q quit");
     frame.render_widget(footer, footer_area);
 }

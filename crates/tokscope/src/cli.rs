@@ -3,6 +3,7 @@
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use tokscope_core::analysis::aggregate::{aggregate, Filter};
+use tokscope_core::analysis::drilldown::build_details;
 use tokscope_core::model::Session;
 use tokscope_core::{adapters, analysis::aggregate::Summary};
 
@@ -84,8 +85,13 @@ pub fn run() -> anyhow::Result<()> {
             }
         }
         Command::Tui => {
-            let summary = collect(adapter.as_ref(), cli.since)?;
-            crate::tui::run(&summary)?;
+            // Parse once, then build both the summary (header/totals) and the
+            // per-session drill-down details (turns + context) for the TUI.
+            let (sessions, failed) = collect_sessions(adapter.as_ref())?;
+            let filter = Filter { since: cli.since };
+            let summary = aggregate(&sessions, &filter, failed, adapter.id());
+            let details = build_details(&sessions, &filter, adapter.id());
+            crate::tui::run(&summary, &details)?;
         }
     }
     Ok(())

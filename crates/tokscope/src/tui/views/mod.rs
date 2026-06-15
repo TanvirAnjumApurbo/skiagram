@@ -1,3 +1,5 @@
-//! TUI views. MVP ships the session list; drill-down views land with v0.2.
+//! TUI views, one per drill-down level: session list → turns → context.
 
+pub mod context;
 pub mod sessions;
+pub mod turns;

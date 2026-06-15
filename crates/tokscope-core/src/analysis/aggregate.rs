@@ -41,7 +41,7 @@ pub struct Rollup {
 }
 
 impl Rollup {
-    fn add(&mut self, rec: &UsageRecord) {
+    pub(crate) fn add(&mut self, rec: &UsageRecord) {
         self.requests += 1;
         let u = &rec.usage;
         self.input += u.input.unwrap_or(0);
