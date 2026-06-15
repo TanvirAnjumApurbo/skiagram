@@ -51,8 +51,38 @@ pub enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Flamegraph SVG of token spend (project → session → model → token-type).
+    Flame {
+        /// Output SVG path.
+        #[arg(long, default_value = "tokscope-flame.svg")]
+        out: std::path::PathBuf,
+        /// Frame width metric.
+        #[arg(long, value_enum, default_value = "tokens")]
+        metric: MetricArg,
+        /// Print the folded stacks to stdout instead of writing an SVG (for piping).
+        #[arg(long)]
+        fold: bool,
+    },
     /// Interactive session browser (arrow keys / j k, q to quit).
     Tui,
+}
+
+/// Width metric for the flamegraph. CLI-side mirror of
+/// [`tokscope_core::analysis::flame::FlameMetric`] (the core crate has no clap
+/// dependency, so the `ValueEnum` lives here).
+#[derive(Clone, Copy, Debug, clap::ValueEnum)]
+pub(crate) enum MetricArg {
+    Tokens,
+    Cost,
+}
+
+impl From<MetricArg> for tokscope_core::analysis::flame::FlameMetric {
+    fn from(m: MetricArg) -> Self {
+        match m {
+            MetricArg::Tokens => Self::Tokens,
+            MetricArg::Cost => Self::Cost,
+        }
+    }
 }
 
 fn parse_date(s: &str) -> Result<jiff::civil::Date, String> {
@@ -99,6 +129,54 @@ pub fn run() -> anyhow::Result<()> {
                 crate::render::json::print(&report)?;
             } else {
                 crate::render::anomalies::print(&report);
+            }
+        }
+        Command::Flame { out, metric, fold } => {
+            let (sessions, _failed) = collect_sessions(adapter.as_ref())?;
+            let filter = Filter { since: cli.since };
+            let data = tokscope_core::analysis::flame::fold(
+                &sessions,
+                &filter,
+                adapter.id(),
+                metric.into(),
+            );
+            if data.stacks.is_empty() {
+                // Honest empty state; inferno would otherwise emit a "No stack
+                // counts" SVG. Under the Cost metric, point at unpriced models
+                // (the likely reason a non-empty token graph is empty here, §8.7).
+                let why = if data.unpriced_requests > 0 {
+                    format!(
+                        " ({} request(s) on unpriced models excluded)",
+                        data.unpriced_requests
+                    )
+                } else {
+                    String::new()
+                };
+                println!("no token spend found{why} — nothing to graph.");
+            } else if fold {
+                crate::render::flame::print_folded(&data);
+            } else {
+                let file = std::fs::File::create(&out)
+                    .with_context(|| format!("creating {}", out.display()))?;
+                crate::render::flame::write_svg(
+                    &data,
+                    std::io::BufWriter::new(file),
+                    "tokscope — token spend",
+                )?;
+                println!(
+                    "wrote flamegraph: {} ({} stacks · {} {} total)",
+                    out.display(),
+                    data.stacks.len(),
+                    crate::render::fmt_count(data.total_value),
+                    data.unit
+                );
+                if data.unpriced_requests > 0 {
+                    // §8.7: unpriced models are excluded from a cost graph, never guessed.
+                    println!(
+                        "note: {} request(s) on unpriced models were excluded (cost graph)",
+                        data.unpriced_requests
+                    );
+                }
             }
         }
         Command::Tui => {

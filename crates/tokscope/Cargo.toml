@@ -12,6 +12,7 @@ tokscope-core.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 comfy-table.workspace = true
+inferno.workspace = true
 jiff.workspace = true
 owo-colors.workspace = true
 ratatui.workspace = true # crossterm backend used via the `ratatui::crossterm` re-export

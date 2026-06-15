@@ -6,6 +6,7 @@ pub mod classify;
 pub mod context;
 pub mod dedup;
 pub mod drilldown;
+pub mod flame;
 
 use jiff::civil::Date;
 use jiff::{tz::TimeZone, Timestamp};

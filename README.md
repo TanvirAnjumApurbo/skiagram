@@ -13,6 +13,7 @@ leaves your machine**.
 $ tokscope            # spend summary (auto-detects your agent)
 $ tokscope tui        # interactive session browser
 $ tokscope context    # what's filling your context window, and why
+$ tokscope flame --out spend.svg   # flamegraph of where the tokens went
 $ tokscope summary --json --since 2026-06-01
 ```
 
@@ -38,8 +39,8 @@ are usually wrong, and because nobody tells you where the context window went:
    transcripts; most tools drop or misattribute that spend. tokscope folds it back into the
    parent session and shows the sub-agent share.
 
-4. **Drill-down UX.** A navigable TUI today; a literal flamegraph SVG export on the
-   roadmap (v0.3).
+4. **Drill-down UX.** A navigable TUI and a literal flamegraph SVG export
+   (`tokscope flame`).
 
 ## Install
 
@@ -57,6 +58,7 @@ Single static binary, no runtime, no daemon, no network.
 tokscope [summary] [--agent <id>] [--since YYYY-MM-DD]   # plain tables (default)
 tokscope summary --json                                   # machine-readable
 tokscope context [--json]                                 # context-window breakdown
+tokscope flame [--out FILE] [--metric tokens|cost] [--fold]   # flamegraph SVG export
 tokscope tui                                              # interactive browser
 ```
 

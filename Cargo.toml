@@ -29,6 +29,10 @@ ratatui = "0.29" # crossterm backend re-exported as `ratatui::crossterm`
 comfy-table = "7.1"
 owo-colors = { version = "4.1", features = ["supports-colors"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Flamegraph SVG export. default-features=false drops the CLI binary deps
+# (clap/env_logger) and the rayon/dashmap "multithreaded" collapse path we don't
+# use — we only call `flamegraph::from_lines` on stacks we fold ourselves.
+inferno = { version = "0.12", default-features = false }
 
 # Tests
 insta = { version = "1.41", features = ["json"] }
@@ -38,7 +42,6 @@ predicates = "3.1"
 # Planned (CLAUDE.md §4) — added when the feature lands, to keep the build lean:
 #   rusqlite (bundled)  -> Cursor adapter (v0.4)
 #   notify              -> live tail (v0.4)
-#   inferno             -> flamegraph SVG export (v0.3)
 #   tiktoken-rs         -> optional re-tokenization (feature-gated)
 #   simd-json           -> optional fast parsing (feature-gated)
 #   toml + directories  -> user config file
