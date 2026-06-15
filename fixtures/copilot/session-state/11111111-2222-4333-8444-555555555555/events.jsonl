@@ -1,0 +1,13 @@
+{"type":"session.start","id":"e1","parentId":null,"timestamp":"2026-06-16T09:00:00.000Z","data":{"sessionId":"11111111-2222-4333-8444-555555555555","copilotVersion":"0.9.0","startTime":"2026-06-16T09:00:00.000Z","selectedModel":"gpt-5","context":{"cwd":"/home/dev/synthetic-app"}}}
+{"type":"user.message","id":"e2","parentId":"e1","timestamp":"2026-06-16T09:00:05.000Z","data":{"content":"List the files in the project. (synthetic fixture)","attachments":[]}}
+{"type":"assistant.turn_start","id":"e3","parentId":"e2","timestamp":"2026-06-16T09:00:06.000Z","data":{"turnId":"t1","interactionId":"i1"}}
+{"type":"assistant.message","id":"e4","parentId":"e3","timestamp":"2026-06-16T09:00:07.000Z","data":{"messageId":"m1","content":"I'll list the files now.","reasoningText":"The user wants a directory listing; bash ls is the simplest tool. (synthetic)","reasoningOpaque":null,"toolRequests":[{"toolCallId":"call_0001","name":"bash","arguments":{"command":"ls -la"},"type":"function"}]}}
+{"type":"tool.execution_start","id":"e5","parentId":"e4","timestamp":"2026-06-16T09:00:08.000Z","data":{"toolCallId":"call_0001","toolName":"bash","arguments":{"command":"ls -la"}}}
+{"type":"tool.execution_complete","id":"e6","parentId":"e5","timestamp":"2026-06-16T09:00:09.000Z","data":{"toolCallId":"call_0001","toolName":"bash","success":true,"result":{"content":"README.md\nsrc\n","detailedContent":"README.md\nsrc\n"},"model":"gpt-5"}}
+{"type":"session.model_change","id":"e7","parentId":"e6","timestamp":"2026-06-16T09:00:20.000Z","data":{"previousModel":"gpt-5","newModel":"gpt-5-mini"}}
+{"type":"assistant.turn_end","id":"e8","parentId":"e7","timestamp":"2026-06-16T09:00:21.000Z","data":{"turnId":"t1","interactionId":"i1"}}
+{"type":"session.model_change","id":"e9","parentId":"e8","timestamp":"2026-06-16T09:00:22.000Z","data":{"previousModel":"gpt-5-mini","newModel":"gpt-5"}}
+{"type":"assistant.message","id":"e10","parentId":"e9","timestamp":"2026-06-16T09:00:25.000Z","data":{"messageId":"m2","content":"Done. The project has a README and a src directory.","toolRequests":[]}}
+{"type":"session.truncation","id":"e11","parentId":"e10","timestamp":"2026-06-16T09:00:30.000Z","data":{"tokenLimit":128000,"preTruncationTokensInMessages":130000,"postTruncationTokensInMessages":90000,"tokensRemovedDuringTruncation":40000}}
+{"type":"mystery.future_event","id":"e12","parentId":"e11","timestamp":"2026-06-16T09:00:31.000Z","data":{"whatever":true}}
+{"type":"assistant.message","id":"e13","parentId":
