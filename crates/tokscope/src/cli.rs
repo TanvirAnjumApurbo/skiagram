@@ -51,6 +51,14 @@ pub enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Task-type classification: break spend down by what you were doing
+    /// (debugging / feature work / refactor / …), a heuristic inferred from each
+    /// session's tool mix + prompt keywords (CLAUDE.md §2 / v0.3).
+    Classify {
+        /// Emit machine-readable JSON instead of tables.
+        #[arg(long)]
+        json: bool,
+    },
     /// Flamegraph SVG of token spend (project → session → model → token-type).
     Flame {
         /// Output SVG path.
@@ -129,6 +137,17 @@ pub fn run() -> anyhow::Result<()> {
                 crate::render::json::print(&report)?;
             } else {
                 crate::render::anomalies::print(&report);
+            }
+        }
+        Command::Classify { json } => {
+            let (sessions, _failed) = collect_sessions(adapter.as_ref())?;
+            let filter = Filter { since: cli.since };
+            let report =
+                tokscope_core::analysis::classify::classify(&sessions, &filter, adapter.id());
+            if json {
+                crate::render::json::print(&report)?;
+            } else {
+                crate::render::classify::print(&report);
             }
         }
         Command::Flame { out, metric, fold } => {

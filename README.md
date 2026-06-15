@@ -13,6 +13,7 @@ leaves your machine**.
 $ tokscope            # spend summary (auto-detects your agent)
 $ tokscope tui        # interactive session browser
 $ tokscope context    # what's filling your context window, and why
+$ tokscope classify   # spend by what you were doing (debugging / features / …)
 $ tokscope flame --out spend.svg   # flamegraph of where the tokens went
 $ tokscope summary --json --since 2026-06-01
 ```
@@ -58,6 +59,8 @@ Single static binary, no runtime, no daemon, no network.
 tokscope [summary] [--agent <id>] [--since YYYY-MM-DD]   # plain tables (default)
 tokscope summary --json                                   # machine-readable
 tokscope context [--json]                                 # context-window breakdown
+tokscope anomalies [--json]                               # fat-tail requests + retry storms
+tokscope classify [--json]                                # spend by task type (heuristic)
 tokscope flame [--out FILE] [--metric tokens|cost] [--fold]   # flamegraph SVG export
 tokscope tui                                              # interactive browser
 ```
