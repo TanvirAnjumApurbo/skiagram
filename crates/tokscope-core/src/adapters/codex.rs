@@ -302,7 +302,11 @@ fn push_response_item(raw: &RawLine, ts: Option<jiff::Timestamp>, session: &mut 
                 sidechain: false,
                 content_summary: snippet(&text),
                 content_chars: text.chars().count() as u64,
+                thinking_chars: 0,
                 has_thinking: false,
+                tool_use_id: None,
+                attachment_kind: None,
+                item_count: 0,
             });
         }
         Some("function_call") => {
@@ -332,7 +336,11 @@ fn push_response_item(raw: &RawLine, ts: Option<jiff::Timestamp>, session: &mut 
                 sidechain: false,
                 content_summary: None,
                 content_chars: input_bytes,
+                thinking_chars: 0,
                 has_thinking: false,
+                tool_use_id: None,
+                attachment_kind: None,
+                item_count: 0,
             });
         }
         // `reasoning`, `function_call_output`, and any other response_item shapes
@@ -380,7 +388,11 @@ fn push_event_msg(
                 sidechain: false,
                 content_summary: None,
                 content_chars: 0,
+                thinking_chars: 0,
                 has_thinking,
+                tool_use_id: None,
+                attachment_kind: None,
+                item_count: 0,
             });
         }
         Some("context_compacted") => session.events.push(Event {
@@ -393,7 +405,11 @@ fn push_event_msg(
             sidechain: false,
             content_summary: Some("context compacted".to_string()),
             content_chars: 0,
+            thinking_chars: 0,
             has_thinking: false,
+            tool_use_id: None,
+            attachment_kind: None,
+            item_count: 0,
         }),
         // A completed MCP / patch / generic tool call reported as an event_msg.
         // We synthesize a ToolCall event so tool + MCP-server attribution sees it
@@ -410,7 +426,11 @@ fn push_event_msg(
                     sidechain: false,
                     content_summary: None,
                     content_chars: 0,
+                    thinking_chars: 0,
                     has_thinking: false,
+                    tool_use_id: None,
+                    attachment_kind: None,
+                    item_count: 0,
                 });
             }
         }

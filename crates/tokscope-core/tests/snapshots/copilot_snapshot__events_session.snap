@@ -50,6 +50,7 @@ expression: session
       "sidechain": false,
       "content_summary": "I'll list the files now.",
       "content_chars": 121,
+      "thinking_chars": 77,
       "has_thinking": true
     },
     {
@@ -61,7 +62,8 @@ expression: session
       "sidechain": false,
       "content_summary": "bash",
       "content_chars": 67,
-      "has_thinking": false
+      "has_thinking": false,
+      "tool_use_id": "call_0001"
     },
     {
       "kind": "Assistant",

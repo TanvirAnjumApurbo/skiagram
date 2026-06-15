@@ -264,7 +264,11 @@ fn apply_session_start(
         sidechain: false,
         content_summary: Some("session start".to_string()),
         content_chars: 0,
+        thinking_chars: 0,
         has_thinking: false,
+        tool_use_id: None,
+        attachment_kind: None,
+        item_count: 0,
     });
 }
 
@@ -285,7 +289,11 @@ fn apply_session_resume(raw: &RawLine, session: &mut Session) {
         sidechain: false,
         content_summary: Some("session resume".to_string()),
         content_chars: 0,
+        thinking_chars: 0,
         has_thinking: false,
+        tool_use_id: None,
+        attachment_kind: None,
+        item_count: 0,
     });
 }
 
@@ -316,7 +324,11 @@ fn push_user(raw: &RawLine, session: &mut Session) {
         sidechain: false,
         content_summary: snippet(content),
         content_chars: content.chars().count() as u64,
+        thinking_chars: 0,
         has_thinking: false,
+        tool_use_id: None,
+        attachment_kind: None,
+        item_count: 0,
     });
 }
 
@@ -375,7 +387,11 @@ fn push_assistant(raw: &RawLine, session: &mut Session, model_counts: &mut BTree
         sidechain: false,
         content_summary: snippet(content),
         content_chars,
+        thinking_chars: reasoning_text.chars().count() as u64,
         has_thinking,
+        tool_use_id: None,
+        attachment_kind: None,
+        item_count: 0,
     });
 }
 
@@ -401,7 +417,11 @@ fn push_tool_result(raw: &RawLine, session: &mut Session) {
         // The matching tool call's id, so results link back to their call.
         content_summary: data.tool_name.clone().or_else(|| data.tool_call_id.clone()),
         content_chars,
+        thinking_chars: 0,
         has_thinking: false,
+        tool_use_id: data.tool_call_id.clone(),
+        attachment_kind: None,
+        item_count: 0,
     });
 }
 

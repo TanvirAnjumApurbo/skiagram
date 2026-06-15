@@ -130,11 +130,15 @@ fn unknown_agent_fails_with_known_ids() {
 
 #[test]
 fn stub_adapters_fail_loudly_not_silently() {
-    tokscope()
-        .args(["summary", "--agent", "codex"])
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("not yet implemented"));
+    // codex + copilot are implemented (v0.4); cursor + gemini remain stubs that
+    // must still fail loudly rather than silently returning nothing.
+    for agent in ["cursor", "gemini"] {
+        tokscope()
+            .args(["summary", "--agent", agent])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("not yet implemented"));
+    }
 }
 
 // ---- context-bloat attribution (v0.2) ----
