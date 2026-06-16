@@ -31,6 +31,7 @@ owo-colors = { version = "4.1", features = ["supports-colors"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 toml = "0.8" # user config file (config.toml)
 ureq = "2" # optional online pricing refresh (behind the `network` feature)
+notify = "6.1" # live-tail: watch session files for changes
 # Flamegraph SVG export. default-features=false drops the CLI binary deps
 # (clap/env_logger) and the rayon/dashmap "multithreaded" collapse path we don't
 # use — we only call `flamegraph::from_lines` on stacks we fold ourselves.

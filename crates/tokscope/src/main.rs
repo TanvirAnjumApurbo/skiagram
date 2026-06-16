@@ -5,6 +5,7 @@ mod config;
 mod pricing;
 mod render;
 mod tui;
+mod watch;
 
 fn main() {
     // Logs (incl. lenient-parse warnings) go to stderr so stdout stays clean for

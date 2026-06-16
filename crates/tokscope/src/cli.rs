@@ -80,6 +80,9 @@ pub enum Command {
     },
     /// Interactive session browser (arrow keys / j k, q to quit).
     Tui,
+    /// Live-tail: print the summary, then re-render whenever session files change
+    /// (watches the agent's data dirs via `notify`; Ctrl-C to stop).
+    Watch,
 }
 
 /// Width metric for the flamegraph. CLI-side mirror of
@@ -231,6 +234,9 @@ pub fn run() -> anyhow::Result<()> {
             let details = build_details(&sessions, &filter, adapter.id(), &pricing);
             crate::tui::run(&summary, &details)?;
         }
+        Command::Watch => {
+            crate::watch::run(adapter.as_ref(), cli.since, &pricing)?;
+        }
     }
     Ok(())
 }
@@ -258,8 +264,9 @@ fn collect_sessions(adapter: &dyn adapters::Adapter) -> anyhow::Result<(Vec<Sess
     Ok((sessions, failed))
 }
 
-/// Discover -> parse (leniently) -> dedup + aggregate.
-fn collect(
+/// Discover -> parse (leniently) -> dedup + aggregate. Shared by `summary` and the
+/// live-tail `watch` loop.
+pub(crate) fn collect(
     adapter: &dyn adapters::Adapter,
     since: Option<jiff::civil::Date>,
     pricing: &PricingTable,
