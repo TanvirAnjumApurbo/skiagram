@@ -5,6 +5,7 @@ use clap::{Parser, Subcommand};
 use tokscope_core::analysis::aggregate::{aggregate, Filter};
 use tokscope_core::analysis::drilldown::build_details;
 use tokscope_core::model::Session;
+use tokscope_core::pricing::PricingTable;
 use tokscope_core::{adapters, analysis::aggregate::Summary};
 
 #[derive(Parser)]
@@ -24,6 +25,12 @@ pub struct Cli {
     /// Only count usage on/after this UTC date (YYYY-MM-DD).
     #[arg(long, global = true, value_parser = parse_date)]
     pub since: Option<jiff::civil::Date>,
+
+    /// Refresh model prices from LiteLLM before costing, then cache them for
+    /// later offline runs. Requires the `network` build feature; OFF by default so
+    /// the standard build never touches the network (CLAUDE.md §12).
+    #[arg(long, global = true)]
+    pub refresh_pricing: bool,
 
     #[command(subcommand)]
     pub command: Option<Command>,
@@ -113,9 +120,13 @@ pub fn run() -> anyhow::Result<()> {
         })?,
     };
 
+    // Pricing table threaded into every cost computation. The embedded snapshot is
+    // the default; `--refresh-pricing` / a cached refresh layer overrides on top.
+    let pricing = crate::pricing::build_pricing(cli.refresh_pricing)?;
+
     match cli.command.unwrap_or(Command::Summary { json: false }) {
         Command::Summary { json } => {
-            let summary = collect(adapter.as_ref(), cli.since)?;
+            let summary = collect(adapter.as_ref(), cli.since, &pricing)?;
             if json {
                 crate::render::json::print(&summary)?;
             } else {
@@ -135,7 +146,12 @@ pub fn run() -> anyhow::Result<()> {
         Command::Anomalies { json } => {
             let (sessions, _failed) = collect_sessions(adapter.as_ref())?;
             let filter = Filter { since: cli.since };
-            let report = tokscope_core::analysis::anomaly::detect(&sessions, &filter, adapter.id());
+            let report = tokscope_core::analysis::anomaly::detect(
+                &sessions,
+                &filter,
+                adapter.id(),
+                &pricing,
+            );
             if json {
                 crate::render::json::print(&report)?;
             } else {
@@ -145,8 +161,12 @@ pub fn run() -> anyhow::Result<()> {
         Command::Classify { json } => {
             let (sessions, _failed) = collect_sessions(adapter.as_ref())?;
             let filter = Filter { since: cli.since };
-            let report =
-                tokscope_core::analysis::classify::classify(&sessions, &filter, adapter.id());
+            let report = tokscope_core::analysis::classify::classify(
+                &sessions,
+                &filter,
+                adapter.id(),
+                &pricing,
+            );
             if json {
                 crate::render::json::print(&report)?;
             } else {
@@ -161,6 +181,7 @@ pub fn run() -> anyhow::Result<()> {
                 &filter,
                 adapter.id(),
                 metric.into(),
+                &pricing,
             );
             if data.stacks.is_empty() {
                 // Honest empty state; inferno would otherwise emit a "No stack
@@ -206,8 +227,8 @@ pub fn run() -> anyhow::Result<()> {
             // per-session drill-down details (turns + context) for the TUI.
             let (sessions, failed) = collect_sessions(adapter.as_ref())?;
             let filter = Filter { since: cli.since };
-            let summary = aggregate(&sessions, &filter, failed, adapter.id());
-            let details = build_details(&sessions, &filter, adapter.id());
+            let summary = aggregate(&sessions, &filter, failed, adapter.id(), &pricing);
+            let details = build_details(&sessions, &filter, adapter.id(), &pricing);
             crate::tui::run(&summary, &details)?;
         }
     }
@@ -241,6 +262,7 @@ fn collect_sessions(adapter: &dyn adapters::Adapter) -> anyhow::Result<(Vec<Sess
 fn collect(
     adapter: &dyn adapters::Adapter,
     since: Option<jiff::civil::Date>,
+    pricing: &PricingTable,
 ) -> anyhow::Result<Summary> {
     let (sessions, failed) = collect_sessions(adapter)?;
     Ok(aggregate(
@@ -248,5 +270,6 @@ fn collect(
         &Filter { since },
         failed,
         adapter.id(),
+        pricing,
     ))
 }

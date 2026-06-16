@@ -22,6 +22,12 @@ serde_json.workspace = true
 toml.workspace = true # parse config.toml
 tracing.workspace = true
 tracing-subscriber.workspace = true
+ureq = { workspace = true, optional = true } # online pricing refresh (network feature)
+
+[features]
+# OFF by default — the standard build is fully offline (CLAUDE.md §12). Enabling it
+# compiles the `--refresh-pricing` fetch path (LiteLLM) via `ureq`.
+network = ["dep:ureq"]
 
 [dev-dependencies]
 assert_cmd.workspace = true

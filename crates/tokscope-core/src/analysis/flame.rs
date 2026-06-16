@@ -35,7 +35,7 @@ use serde::Serialize;
 use crate::analysis::aggregate::Filter;
 use crate::analysis::dedup::dedup_session;
 use crate::model::{Session, Usage};
-use crate::pricing;
+use crate::pricing::{self, PricingTable};
 
 /// Fallback `project` frame when a record has no project label.
 const UNKNOWN_PROJECT: &str = "(unknown project)";
@@ -204,7 +204,13 @@ fn leaves(usage: &Usage, pricing: Option<&pricing::ModelPricing>) -> [Leaf; 5] {
 /// transcripts into their parent (§8.3). Under the Cost metric, a request whose
 /// model is unpriced is skipped entirely and counted in `unpriced_requests` —
 /// prices are never guessed (§8.7).
-pub fn fold(sessions: &[Session], filter: &Filter, agent: &str, metric: FlameMetric) -> FlameData {
+pub fn fold(
+    sessions: &[Session],
+    filter: &Filter,
+    agent: &str,
+    metric: FlameMetric,
+    pricing_table: &PricingTable,
+) -> FlameData {
     // Accumulate weights per unique 4-frame path. A BTreeMap keeps the emitted
     // stacks in deterministic sorted order for free. f64 keeps cross-request
     // cost accumulation exact (we round only on emit); for tokens the values are
@@ -218,13 +224,15 @@ pub fn fold(sessions: &[Session], filter: &Filter, agent: &str, metric: FlameMet
             // Cost: refuse to price an unknown model — count it and skip (§8.7).
             let pricing = match metric {
                 FlameMetric::Tokens => None,
-                FlameMetric::Cost => match rec.model.as_deref().and_then(pricing::lookup) {
-                    Some(p) => Some(p),
-                    None => {
-                        unpriced_requests += 1;
-                        continue;
+                FlameMetric::Cost => {
+                    match rec.model.as_deref().and_then(|m| pricing_table.lookup(m)) {
+                        Some(p) => Some(p),
+                        None => {
+                            unpriced_requests += 1;
+                            continue;
+                        }
                     }
-                },
+                }
             };
 
             // Frames base→leaf: project, session (parent folds in), model.
@@ -355,7 +363,13 @@ mod tests {
     #[test]
     fn basic_tokens_fold_produces_per_type_leaves() {
         let s = session("s", None, vec![turn("r", usage(1_000, 200, 5_000, 300))]);
-        let d = fold(&[s], &Filter::default(), "claude-code", FlameMetric::Tokens);
+        let d = fold(
+            &[s],
+            &Filter::default(),
+            "claude-code",
+            FlameMetric::Tokens,
+            &PricingTable::embedded(),
+        );
 
         assert_eq!(d.unit, "tokens");
         assert_eq!(d.unpriced_requests, 0);
@@ -382,7 +396,13 @@ mod tests {
             None,
             vec![turn("req", u), turn("req", u), turn("req", u)],
         );
-        let d = fold(&[s], &Filter::default(), "claude-code", FlameMetric::Tokens);
+        let d = fold(
+            &[s],
+            &Filter::default(),
+            "claude-code",
+            FlameMetric::Tokens,
+            &PricingTable::embedded(),
+        );
         let m = "claude-sonnet-4-5";
         assert_eq!(leaf_value(&d, "proj", "s", m, "input"), Some(1_000));
         assert_eq!(leaf_value(&d, "proj", "s", m, "output"), Some(200));
@@ -404,6 +424,7 @@ mod tests {
             &Filter::default(),
             "claude-code",
             FlameMetric::Tokens,
+            &PricingTable::embedded(),
         );
         let m = "claude-sonnet-4-5";
         // Both land on session frame "parent"; the child's own id never appears.
@@ -423,7 +444,13 @@ mod tests {
     fn cost_metric_prices_each_leaf() {
         let u = usage(1_000, 100, 2_000, 400);
         let s = session("s", None, vec![turn("r", u)]);
-        let d = fold(&[s], &Filter::default(), "claude-code", FlameMetric::Cost);
+        let d = fold(
+            &[s],
+            &Filter::default(),
+            "claude-code",
+            FlameMetric::Cost,
+            &PricingTable::embedded(),
+        );
 
         assert_eq!(d.unit, "µ$");
         assert_eq!(d.unpriced_requests, 0);
@@ -454,7 +481,13 @@ mod tests {
             ..Usage::default()
         };
         let s = session("s", None, vec![turn("r", u)]);
-        let d = fold(&[s], &Filter::default(), "claude-code", FlameMetric::Cost);
+        let d = fold(
+            &[s],
+            &Filter::default(),
+            "claude-code",
+            FlameMetric::Cost,
+            &PricingTable::embedded(),
+        );
         // 1000 thinking tokens * output rate 15.0 = 15_000 micro-USD.
         assert_eq!(
             leaf_value(&d, "proj", "s", "claude-sonnet-4-5", "thinking"),
@@ -475,6 +508,7 @@ mod tests {
             &Filter::default(),
             "claude-code",
             FlameMetric::Cost,
+            &PricingTable::embedded(),
         );
         assert!(d.stacks.is_empty());
         assert_eq!(d.total_value, 0);
@@ -488,6 +522,7 @@ mod tests {
             &Filter::default(),
             "claude-code",
             FlameMetric::Cost,
+            &PricingTable::embedded(),
         );
         assert_eq!(d.unpriced_requests, 1);
         assert_eq!(d.stacks.len(), 1, "only the priced request contributes");
@@ -504,7 +539,13 @@ mod tests {
         let mut unp = turn("u", usage(5_000, 100, 0, 0));
         unp.model = Some("claude-opus-4-8".into());
         let s = session("s", None, vec![unp]);
-        let d = fold(&[s], &Filter::default(), "claude-code", FlameMetric::Tokens);
+        let d = fold(
+            &[s],
+            &Filter::default(),
+            "claude-code",
+            FlameMetric::Tokens,
+            &PricingTable::embedded(),
+        );
         assert_eq!(d.unpriced_requests, 0);
         assert_eq!(
             leaf_value(&d, "proj", "s", "claude-opus-4-8", "input"),
@@ -523,7 +564,13 @@ mod tests {
         let filter = Filter {
             since: Some("2026-06-02".parse().unwrap()),
         };
-        let d = fold(&[s], &filter, "claude-code", FlameMetric::Tokens);
+        let d = fold(
+            &[s],
+            &filter,
+            "claude-code",
+            FlameMetric::Tokens,
+            &PricingTable::embedded(),
+        );
         assert_eq!(d.since, filter.since);
         assert_eq!(d.total_value, 100, "only the in-window request remains");
         assert_eq!(
@@ -535,7 +582,13 @@ mod tests {
     /// Empty input -> an empty but well-formed result.
     #[test]
     fn empty_input_is_an_empty_result() {
-        let d = fold(&[], &Filter::default(), "claude-code", FlameMetric::Tokens);
+        let d = fold(
+            &[],
+            &Filter::default(),
+            "claude-code",
+            FlameMetric::Tokens,
+            &PricingTable::embedded(),
+        );
         assert!(d.stacks.is_empty());
         assert_eq!(d.total_value, 0);
         assert_eq!(d.unpriced_requests, 0);
@@ -572,6 +625,7 @@ mod tests {
             &Filter::default(),
             "claude-code",
             FlameMetric::Tokens,
+            &PricingTable::embedded(),
         );
 
         assert!(d.stacks.len() >= 2);

@@ -37,7 +37,7 @@ use serde::Serialize;
 use crate::analysis::aggregate::Filter;
 use crate::analysis::dedup::dedup_session;
 use crate::model::Session;
-use crate::pricing;
+use crate::pricing::PricingTable;
 
 /// Minimum number of rapid requests for a run to count as a retry storm.
 /// Heuristic — surfaced in [`AnomalyReport::storm_min_requests`].
@@ -163,14 +163,19 @@ fn share(part: u64, whole: u64) -> f64 {
 /// keeps its own session id (storms are per-transcript timelines), while the
 /// fat-tail rollups span every request in the window. `filter.since` is applied
 /// inside [`dedup_session`], so the report covers the same window as `summary`.
-pub fn detect(sessions: &[Session], filter: &Filter, agent: &str) -> AnomalyReport {
+pub fn detect(
+    sessions: &[Session],
+    filter: &Filter,
+    agent: &str,
+    pricing: &PricingTable,
+) -> AnomalyReport {
     // 1. Flatten every session to deduplicated requests (§8.1).
     let mut reqs: Vec<Req> = Vec::new();
     for session in sessions {
         let (records, _stats) = dedup_session(session, filter.since);
         for rec in records {
             let tokens = rec.usage.known_total();
-            let cost = pricing::cost_usd(rec.model.as_deref(), &rec.usage);
+            let cost = pricing.cost_usd(rec.model.as_deref(), &rec.usage);
             reqs.push(Req {
                 session_id: rec.session_id,
                 project: rec.project,
@@ -429,7 +434,12 @@ mod tests {
             ));
         }
         let s = session("s", None, events);
-        let r = detect(&[s], &Filter::default(), "claude-code");
+        let r = detect(
+            &[s],
+            &Filter::default(),
+            "claude-code",
+            &PricingTable::embedded(),
+        );
 
         assert_eq!(r.requests_analyzed, 10);
         assert_eq!(r.total_tokens, 109_000);
@@ -470,7 +480,12 @@ mod tests {
                 turn("late", "2026-06-02T11:00:00Z", 1_000, 10),
             ],
         );
-        let r = detect(&[s], &Filter::default(), "claude-code");
+        let r = detect(
+            &[s],
+            &Filter::default(),
+            "claude-code",
+            &PricingTable::embedded(),
+        );
         assert_eq!(r.retry_storms.len(), 1, "one burst of five");
         let storm = &r.retry_storms[0];
         assert_eq!(storm.requests, 5);
@@ -508,7 +523,12 @@ mod tests {
                 turn("f", "2026-06-02T10:01:20Z", 1, 1),
             ],
         );
-        let r = detect(&[four, split], &Filter::default(), "claude-code");
+        let r = detect(
+            &[four, split],
+            &Filter::default(),
+            "claude-code",
+            &PricingTable::embedded(),
+        );
         assert!(r.retry_storms.is_empty());
     }
 
@@ -525,7 +545,12 @@ mod tests {
                 turn("req", "2026-06-02T10:00:00Z", 1_000, 200),
             ],
         );
-        let r = detect(&[s], &Filter::default(), "claude-code");
+        let r = detect(
+            &[s],
+            &Filter::default(),
+            "claude-code",
+            &PricingTable::embedded(),
+        );
         assert_eq!(r.requests_analyzed, 1, "3 lines -> 1 request");
         assert_eq!(r.total_tokens, 1_200);
         assert!(r.retry_storms.is_empty(), "one request is not a storm");
@@ -539,7 +564,12 @@ mod tests {
         unp.model = Some("claude-opus-4-8".into()); // post-snapshot, unpriced
         let priced = turn("p", "2026-06-02T11:00:00Z", 1_000, 0);
         let s = session("s", None, vec![unp, priced]);
-        let r = detect(&[s], &Filter::default(), "claude-code");
+        let r = detect(
+            &[s],
+            &Filter::default(),
+            "claude-code",
+            &PricingTable::embedded(),
+        );
 
         assert!(r.has_unpriced);
         // Heaviest is the 5k unpriced request — ranking is by tokens, not cost.
@@ -564,7 +594,7 @@ mod tests {
         let filter = Filter {
             since: Some("2026-06-02".parse().unwrap()),
         };
-        let r = detect(&[s], &filter, "claude-code");
+        let r = detect(&[s], &filter, "claude-code", &PricingTable::embedded());
         assert_eq!(r.requests_analyzed, 1);
         assert_eq!(r.total_tokens, 100);
         assert_eq!(r.heaviest[0].request_id.as_deref(), Some("new"));
@@ -574,7 +604,12 @@ mod tests {
     /// No requests in the window -> an empty but well-formed report.
     #[test]
     fn empty_window_is_an_empty_report() {
-        let r = detect(&[], &Filter::default(), "claude-code");
+        let r = detect(
+            &[],
+            &Filter::default(),
+            "claude-code",
+            &PricingTable::embedded(),
+        );
         assert_eq!(r.requests_analyzed, 0);
         assert!(r.concentration.is_empty());
         assert!(r.heaviest.is_empty());
@@ -597,7 +632,12 @@ mod tests {
                 turn("c4", "2026-06-02T10:00:18Z", 100, 1),
             ],
         );
-        let r = detect(&[child], &Filter::default(), "claude-code");
+        let r = detect(
+            &[child],
+            &Filter::default(),
+            "claude-code",
+            &PricingTable::embedded(),
+        );
         assert_eq!(r.retry_storms.len(), 1);
         assert_eq!(r.retry_storms[0].session_id, "agent-x");
         assert!(r.heaviest.iter().all(|h| h.sidechain));

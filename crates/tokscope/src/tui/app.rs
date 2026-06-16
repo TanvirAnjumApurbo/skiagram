@@ -241,6 +241,7 @@ mod tests {
     use tokscope_core::analysis::aggregate::{aggregate, Filter};
     use tokscope_core::analysis::drilldown::build_details;
     use tokscope_core::model::{Event, EventKind, Session, Usage};
+    use tokscope_core::pricing::PricingTable;
 
     fn asst(rid: &str, input: u64) -> Event {
         Event {
@@ -289,8 +290,14 @@ mod tests {
             session("small", vec![asst("r3", 10)]),
         ];
         let filter = Filter::default();
-        let summary = aggregate(&sessions, &filter, 0, "claude-code");
-        let details = build_details(&sessions, &filter, "claude-code");
+        let summary = aggregate(
+            &sessions,
+            &filter,
+            0,
+            "claude-code",
+            &PricingTable::embedded(),
+        );
+        let details = build_details(&sessions, &filter, "claude-code", &PricingTable::embedded());
         (summary, details)
     }
 
@@ -342,7 +349,13 @@ mod tests {
     fn enter_is_a_noop_with_no_sessions() {
         // Empty details: nothing to drill into; stay put and don't panic.
         let sessions: Vec<Session> = Vec::new();
-        let summary = aggregate(&sessions, &Filter::default(), 0, "claude-code");
+        let summary = aggregate(
+            &sessions,
+            &Filter::default(),
+            0,
+            "claude-code",
+            &PricingTable::embedded(),
+        );
         let details: Vec<SessionDetail> = Vec::new();
         let mut app = App::new(&summary, &details);
         assert!(!press(&mut app, KeyCode::Enter));

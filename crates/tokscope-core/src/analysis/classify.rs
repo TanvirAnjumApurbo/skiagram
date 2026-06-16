@@ -24,7 +24,7 @@ use serde::Serialize;
 use crate::analysis::aggregate::{Filter, Rollup};
 use crate::analysis::dedup::{dedup_session, UsageRecord};
 use crate::model::{EventKind, Session};
-use crate::pricing;
+use crate::pricing::PricingTable;
 
 /// What the user was doing in a session, inferred from prompt text + tool mix.
 ///
@@ -276,7 +276,12 @@ impl GroupAcc {
 /// (§8.3) exactly as [`super::aggregate::aggregate`] does, so the per-type
 /// totals reconcile with the summary's grand totals. Groups with no in-window
 /// spend are dropped; empty input yields a well-formed empty report.
-pub fn classify(sessions: &[Session], filter: &Filter, agent: &str) -> ClassifyReport {
+pub fn classify(
+    sessions: &[Session],
+    filter: &Filter,
+    agent: &str,
+    pricing: &PricingTable,
+) -> ClassifyReport {
     let mut groups: BTreeMap<String, GroupAcc> = BTreeMap::new();
 
     for session in sessions {
@@ -302,7 +307,7 @@ pub fn classify(sessions: &[Session], filter: &Filter, agent: &str) -> ClassifyR
 
         let (records, _) = dedup_session(session, filter.since);
         for rec in &records {
-            add_record(&mut group.rollup, rec);
+            add_record(&mut group.rollup, rec, pricing);
         }
     }
 
@@ -402,7 +407,7 @@ pub fn classify(sessions: &[Session], filter: &Filter, agent: &str) -> ClassifyR
 /// mirrors it exactly (same fields, same `pricing::cost_usd` call) over the
 /// already-deduplicated record — keeping per-type totals reconciled with the
 /// summary's grand totals (CLAUDE.md §8.1, §8.4, §8.5).
-fn add_record(into: &mut Rollup, rec: &UsageRecord) {
+fn add_record(into: &mut Rollup, rec: &UsageRecord, pricing: &PricingTable) {
     let u = &rec.usage;
     into.requests += 1;
     into.input += u.input.unwrap_or(0);
@@ -416,7 +421,7 @@ fn add_record(into: &mut Rollup, rec: &UsageRecord) {
     {
         into.incomplete_requests += 1;
     }
-    match pricing::cost_usd(rec.model.as_deref(), u) {
+    match pricing.cost_usd(rec.model.as_deref(), u) {
         Some(cost) => into.cost_usd += cost,
         None => into.unpriced_requests += 1,
     }
@@ -705,7 +710,7 @@ mod tests {
                 tools_turn("r1", &["Edit", "Bash", "Bash", "Bash", "Edit"]),
             ],
         );
-        let report = classify(&[s], &no_filter(), "claude-code");
+        let report = classify(&[s], &no_filter(), "claude-code", &PricingTable::embedded());
         let c = class_of(&report, "dbg");
         assert_eq!(c.task_type, TaskType::Debugging);
         assert!(c.signals.iter().any(|s| s.contains("\"fix\"")));
@@ -722,7 +727,7 @@ mod tests {
                 tools_turn("r1", &["Write", "Edit"]),
             ],
         );
-        let report = classify(&[s], &no_filter(), "claude-code");
+        let report = classify(&[s], &no_filter(), "claude-code", &PricingTable::embedded());
         assert_eq!(class_of(&report, "feat").task_type, TaskType::FeatureWork);
     }
 
@@ -736,7 +741,7 @@ mod tests {
                 tools_turn("r1", &["Edit", "MultiEdit", "Edit", "Edit"]),
             ],
         );
-        let report = classify(&[s], &no_filter(), "claude-code");
+        let report = classify(&[s], &no_filter(), "claude-code", &PricingTable::embedded());
         let c = class_of(&report, "ref");
         assert_eq!(c.task_type, TaskType::Refactoring);
         // MultiEdit folds into the Edit count: 3 Edit + 1 MultiEdit = 4 Edit.
@@ -755,7 +760,7 @@ mod tests {
         );
         // Provide spend so the group survives.
         let s = with_spend(s);
-        let report = classify(&[s], &no_filter(), "claude-code");
+        let report = classify(&[s], &no_filter(), "claude-code", &PricingTable::embedded());
         assert_eq!(class_of(&report, "tst").task_type, TaskType::Testing);
     }
 
@@ -769,7 +774,7 @@ mod tests {
                 "Update the README and changelog",
             )],
         ));
-        let report = classify(&[s], &no_filter(), "claude-code");
+        let report = classify(&[s], &no_filter(), "claude-code", &PricingTable::embedded());
         assert_eq!(class_of(&report, "doc").task_type, TaskType::Documentation);
     }
 
@@ -786,7 +791,7 @@ mod tests {
                 tools_turn("r1", &["Read", "Grep", "Glob", "Read"]),
             ],
         );
-        let report = classify(&[s], &no_filter(), "claude-code");
+        let report = classify(&[s], &no_filter(), "claude-code", &PricingTable::embedded());
         let c = class_of(&report, "exp");
         assert_eq!(c.task_type, TaskType::Exploration);
         assert!(c.signals.iter().any(|s| s.contains("tool mix")));
@@ -802,7 +807,7 @@ mod tests {
                 "Bump the cargo dependencies in the CI workflow",
             )],
         ));
-        let report = classify(&[s], &no_filter(), "claude-code");
+        let report = classify(&[s], &no_filter(), "claude-code", &PricingTable::embedded());
         assert_eq!(class_of(&report, "cfg").task_type, TaskType::ConfigOps);
     }
 
@@ -825,7 +830,7 @@ mod tests {
                 turn("r1", "2026-06-01T10:00:00Z", 100, &[]),
             ],
         );
-        let report = classify(&[s], &no_filter(), "claude-code");
+        let report = classify(&[s], &no_filter(), "claude-code", &PricingTable::embedded());
         let c = class_of(&report, "blank");
         assert_eq!(c.task_type, TaskType::Unknown);
         assert_eq!(c.confidence, 0.0);
@@ -839,7 +844,7 @@ mod tests {
             None,
             vec![user("2026-06-01T10:00:00Z", "Update the readme docs")],
         ));
-        let report = classify(&[s], &no_filter(), "claude-code");
+        let report = classify(&[s], &no_filter(), "claude-code", &PricingTable::embedded());
         let c = class_of(&report, "solo");
         assert_eq!(c.task_type, TaskType::Documentation);
         assert!((c.confidence - 1.0).abs() < 1e-9, "got {}", c.confidence);
@@ -856,7 +861,7 @@ mod tests {
                 "fix the failing tests and add coverage",
             )],
         ));
-        let report = classify(&[s], &no_filter(), "claude-code");
+        let report = classify(&[s], &no_filter(), "claude-code", &PricingTable::embedded());
         let c = class_of(&report, "mix");
         assert!(
             c.confidence > 0.0 && c.confidence < 1.0,
@@ -885,7 +890,12 @@ mod tests {
             Some("parent"),
             vec![turn("c1", "2026-06-01T10:01:00Z", 500, &[])],
         );
-        let report = classify(&[parent, child], &no_filter(), "claude-code");
+        let report = classify(
+            &[parent, child],
+            &no_filter(),
+            "claude-code",
+            &PricingTable::embedded(),
+        );
 
         // One row only — the child folded in.
         assert_eq!(report.sessions.len(), 1);
@@ -918,7 +928,12 @@ mod tests {
                 tools_turn("c1", &["Read", "Grep"]),
             ],
         );
-        let report = classify(&[child], &no_filter(), "claude-code");
+        let report = classify(
+            &[child],
+            &no_filter(),
+            "claude-code",
+            &PricingTable::embedded(),
+        );
         assert_eq!(report.sessions.len(), 1);
         let row = &report.sessions[0];
         assert_eq!(row.id, "missing-parent");
@@ -949,7 +964,12 @@ mod tests {
         let filter = Filter {
             since: Some("2026-06-03".parse().unwrap()),
         };
-        let report = classify(&[old, new], &filter, "claude-code");
+        let report = classify(
+            &[old, new],
+            &filter,
+            "claude-code",
+            &PricingTable::embedded(),
+        );
         assert_eq!(report.sessions.len(), 1, "old dropped (no in-window spend)");
         assert_eq!(report.sessions[0].id, "new");
         assert_eq!(report.total_tokens, 200 + 10);
@@ -967,7 +987,7 @@ mod tests {
                 unpriced_turn("u1", "2026-06-01T10:00:00Z", 1000),
             ],
         );
-        let report = classify(&[s], &no_filter(), "claude-code");
+        let report = classify(&[s], &no_filter(), "claude-code", &PricingTable::embedded());
         assert!(report.has_unpriced);
         assert_eq!(report.total_cost_usd, 0.0);
         assert_eq!(report.by_task_type.len(), 1);
@@ -995,7 +1015,12 @@ mod tests {
                 turn("f1", "2026-06-01T10:00:00Z", 3000, &["Write", "Edit"]),
             ],
         );
-        let report = classify(&[dbg, feat], &no_filter(), "claude-code");
+        let report = classify(
+            &[dbg, feat],
+            &no_filter(),
+            "claude-code",
+            &PricingTable::embedded(),
+        );
         assert_eq!(report.by_task_type.len(), 2);
         let share_sum: f64 = report.by_task_type.iter().map(|b| b.token_share).sum();
         assert!((share_sum - 1.0).abs() < 1e-9, "shares sum to {share_sum}");
@@ -1030,7 +1055,12 @@ mod tests {
                 turn("b1", "2026-06-01T10:00:00Z", 9000, &["Write", "Edit"]),
             ],
         );
-        let report = classify(&[small, big], &no_filter(), "claude-code");
+        let report = classify(
+            &[small, big],
+            &no_filter(),
+            "claude-code",
+            &PricingTable::embedded(),
+        );
         // Sessions: higher cost first.
         assert_eq!(report.sessions[0].id, "big");
         assert_eq!(report.sessions[1].id, "small");
@@ -1041,7 +1071,7 @@ mod tests {
 
     #[test]
     fn empty_input_yields_empty_report() {
-        let report = classify(&[], &no_filter(), "claude-code");
+        let report = classify(&[], &no_filter(), "claude-code", &PricingTable::embedded());
         assert_eq!(report.total_tokens, 0);
         assert_eq!(report.total_cost_usd, 0.0);
         assert!(!report.has_unpriced);
@@ -1057,7 +1087,7 @@ mod tests {
             None,
             vec![user("2026-06-01T10:00:00Z", "fix the bug")],
         );
-        let report = classify(&[s], &no_filter(), "claude-code");
+        let report = classify(&[s], &no_filter(), "claude-code", &PricingTable::embedded());
         assert!(report.sessions.is_empty());
         assert!(report.by_task_type.is_empty());
     }

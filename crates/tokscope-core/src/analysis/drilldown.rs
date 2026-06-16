@@ -25,7 +25,7 @@ use crate::analysis::aggregate::{Filter, Rollup};
 use crate::analysis::context::{profile_refs, ContextReport};
 use crate::analysis::dedup::dedup_session;
 use crate::model::{Event, EventKind, Session, Usage};
-use crate::pricing;
+use crate::pricing::PricingTable;
 
 /// One deduplicated API request in a session, enriched for display.
 ///
@@ -129,7 +129,7 @@ fn enrichment(
 }
 
 /// Turn rows for a single session file, dedup-correct and enriched for display.
-fn session_turns(session: &Session, filter: &Filter) -> Vec<Turn> {
+fn session_turns(session: &Session, filter: &Filter, pricing: &PricingTable) -> Vec<Turn> {
     let enrich = enrichment(session, filter);
     let (records, _stats) = dedup_session(session, filter.since);
     records
@@ -142,7 +142,7 @@ fn session_turns(session: &Session, filter: &Filter) -> Vec<Turn> {
                 .cloned()
                 .unwrap_or_default();
             Turn {
-                cost_usd: pricing::cost_usd(rec.model.as_deref(), &rec.usage),
+                cost_usd: pricing.cost_usd(rec.model.as_deref(), &rec.usage),
                 request_id: rec.request_id,
                 ts: rec.ts,
                 model: rec.model,
@@ -169,7 +169,12 @@ struct Acc<'a> {
 /// their parent (§8.3) and sorting the same way `summary` sorts its sessions:
 /// cost desc, then total tokens desc, then id. Rows with no requests are dropped
 /// (mirrors [`super::aggregate`]), so the list matches the `summary`.
-pub fn build_details(sessions: &[Session], filter: &Filter, agent: &str) -> Vec<SessionDetail> {
+pub fn build_details(
+    sessions: &[Session],
+    filter: &Filter,
+    agent: &str,
+    pricing: &PricingTable,
+) -> Vec<SessionDetail> {
     // Group by row id = parent_session.unwrap_or(id), exactly like `aggregate`.
     let mut rows: BTreeMap<String, Acc> = BTreeMap::new();
     for session in sessions {
@@ -204,12 +209,12 @@ pub fn build_details(sessions: &[Session], filter: &Filter, agent: &str) -> Vec<
             for file in &acc.files {
                 let (records, _) = dedup_session(file, filter.since);
                 for rec in &records {
-                    rollup.add(rec);
+                    rollup.add(rec, pricing);
                     if rec.sidechain {
                         sub_agent_tokens += rec.usage.known_total();
                     }
                 }
-                turns.extend(session_turns(file, filter));
+                turns.extend(session_turns(file, filter, pricing));
             }
 
             // Drop empty rows so the list matches `summary` (which keeps requests>0).
@@ -331,7 +336,12 @@ mod tests {
             vec![turn("req_c", "2026-06-01T10:05:00Z", usage(500, 50))],
         );
 
-        let details = build_details(&[parent, child], &Filter::default(), "claude-code");
+        let details = build_details(
+            &[parent, child],
+            &Filter::default(),
+            "claude-code",
+            &PricingTable::embedded(),
+        );
         assert_eq!(details.len(), 1, "child folded, not its own row");
         let d = &details[0];
         assert_eq!(d.id, "parent");
@@ -361,7 +371,12 @@ mod tests {
         unp.model = Some("claude-opus-4-8".into()); // post-snapshot, unpriced
         let unpriced = session("b", None, vec![unp]);
 
-        let details = build_details(&[priced, unpriced], &Filter::default(), "claude-code");
+        let details = build_details(
+            &[priced, unpriced],
+            &Filter::default(),
+            "claude-code",
+            &PricingTable::embedded(),
+        );
         let a = details.iter().find(|d| d.id == "a").unwrap();
         let b = details.iter().find(|d| d.id == "b").unwrap();
         // 1000 input * $3/M = $0.003.
@@ -382,7 +397,12 @@ mod tests {
             None,
             vec![turn("r2", "2026-06-02T10:00:00Z", usage(100_000, 0))],
         );
-        let details = build_details(&[small, big], &Filter::default(), "claude-code");
+        let details = build_details(
+            &[small, big],
+            &Filter::default(),
+            "claude-code",
+            &PricingTable::embedded(),
+        );
         let ids: Vec<&str> = details.iter().map(|d| d.id.as_str()).collect();
         assert_eq!(ids, vec!["big", "small"]);
     }
@@ -391,7 +411,12 @@ mod tests {
     #[test]
     fn empty_session_is_dropped() {
         let empty = session("empty", None, vec![ev(EventKind::System)]);
-        let details = build_details(&[empty], &Filter::default(), "claude-code");
+        let details = build_details(
+            &[empty],
+            &Filter::default(),
+            "claude-code",
+            &PricingTable::embedded(),
+        );
         assert!(details.is_empty());
     }
 
@@ -408,7 +433,12 @@ mod tests {
                 turn("req_1", "2026-06-02T10:00:00Z", u),
             ],
         );
-        let details = build_details(&[s], &Filter::default(), "claude-code");
+        let details = build_details(
+            &[s],
+            &Filter::default(),
+            "claude-code",
+            &PricingTable::embedded(),
+        );
         assert_eq!(details[0].turns.len(), 1, "3 lines, 1 request -> 1 turn");
         assert_eq!(details[0].rollup.input, 1000, "not multiplied by 3");
     }

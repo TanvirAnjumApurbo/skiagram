@@ -14,7 +14,7 @@ use serde::Serialize;
 use crate::analysis::dedup::{dedup_session, DedupStats, UsageRecord};
 use crate::analysis::utc_date;
 use crate::model::{EventKind, Session};
-use crate::pricing;
+use crate::pricing::PricingTable;
 
 /// Aggregation filters.
 #[derive(Debug, Default, Clone, Copy)]
@@ -41,7 +41,7 @@ pub struct Rollup {
 }
 
 impl Rollup {
-    pub(crate) fn add(&mut self, rec: &UsageRecord) {
+    pub(crate) fn add(&mut self, rec: &UsageRecord, pricing: &PricingTable) {
         self.requests += 1;
         let u = &rec.usage;
         self.input += u.input.unwrap_or(0);
@@ -55,7 +55,7 @@ impl Rollup {
         {
             self.incomplete_requests += 1;
         }
-        match pricing::cost_usd(rec.model.as_deref(), u) {
+        match pricing.cost_usd(rec.model.as_deref(), u) {
             Some(cost) => self.cost_usd += cost,
             None => self.unpriced_requests += 1,
         }
@@ -135,6 +135,7 @@ pub fn aggregate(
     filter: &Filter,
     sessions_failed: u64,
     agent: &str,
+    pricing: &PricingTable,
 ) -> Summary {
     let mut summary = Summary {
         agent: agent.to_string(),
@@ -209,23 +210,27 @@ pub fn aggregate(
         }
 
         for rec in &records {
-            summary.totals.add(rec);
-            row.rollup.add(rec);
+            summary.totals.add(rec, pricing);
+            row.rollup.add(rec, pricing);
             if rec.sidechain {
-                summary.sidechain_totals.add(rec);
+                summary.sidechain_totals.add(rec, pricing);
                 row.sub_agent_tokens += rec.usage.known_total();
             }
             let model_key = rec.model.clone().unwrap_or_else(|| "(unknown)".into());
-            summary.by_model.entry(model_key).or_default().add(rec);
+            summary
+                .by_model
+                .entry(model_key)
+                .or_default()
+                .add(rec, pricing);
             if let Some(ts) = rec.ts {
                 summary
                     .by_day
                     .entry(utc_date(ts).to_string())
                     .or_default()
-                    .add(rec);
+                    .add(rec, pricing);
             }
             if let Some(model) = &rec.model {
-                if pricing::lookup(model).is_none() {
+                if pricing.lookup(model).is_none() {
                     summary.unpriced_models.insert(model.clone());
                 }
             }
@@ -315,7 +320,13 @@ mod tests {
             Some("parent"),
             vec![assistant_event("req_c", "2026-06-01T10:01:00Z", 500)],
         );
-        let summary = aggregate(&[parent, child], &Filter::default(), 0, "claude-code");
+        let summary = aggregate(
+            &[parent, child],
+            &Filter::default(),
+            0,
+            "claude-code",
+            &PricingTable::embedded(),
+        );
 
         assert_eq!(summary.by_session.len(), 1, "child folded, not a row");
         let row = &summary.by_session[0];
@@ -339,7 +350,7 @@ mod tests {
         let filter = Filter {
             since: Some("2026-06-02".parse().unwrap()),
         };
-        let summary = aggregate(&[s], &filter, 0, "claude-code");
+        let summary = aggregate(&[s], &filter, 0, "claude-code", &PricingTable::embedded());
         assert_eq!(summary.totals.requests, 1);
         assert_eq!(summary.totals.input, 222);
     }

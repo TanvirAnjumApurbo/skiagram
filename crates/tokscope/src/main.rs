@@ -2,6 +2,7 @@
 
 mod cli;
 mod config;
+mod pricing;
 mod render;
 mod tui;
 

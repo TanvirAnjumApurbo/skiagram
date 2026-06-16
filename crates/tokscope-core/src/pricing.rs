@@ -121,6 +121,18 @@ pub const SNAPSHOT: &[(&str, ModelPricing)] = &[
 /// (`anthropic/...`) and dated release suffixes (`-20250929`, `@20250929`).
 /// Returns `None` for unknown models — callers must surface that, not guess.
 pub fn lookup(model: &str) -> Option<&'static ModelPricing> {
+    let m = normalize_model(model);
+    SNAPSHOT
+        .iter()
+        .filter(|(key, _)| key_matches(&m, key))
+        .max_by_key(|(key, _)| key.len()) // longest prefix wins (sonnet-4-5 over sonnet-4)
+        .map(|(_, p)| p)
+}
+
+/// Lower-case and strip provider prefixes (`anthropic/`, `us.anthropic.`,
+/// `anthropic.`) so matching is provider-agnostic. Shared by [`lookup`] and
+/// [`PricingTable`] so embedded and override matching behave identically.
+fn normalize_model(model: &str) -> String {
     let mut m = model.trim().to_ascii_lowercase();
     for prefix in ["anthropic/", "us.anthropic.", "anthropic."] {
         if let Some(rest) = m.strip_prefix(prefix) {
@@ -128,11 +140,7 @@ pub fn lookup(model: &str) -> Option<&'static ModelPricing> {
             break;
         }
     }
-    SNAPSHOT
-        .iter()
-        .filter(|(key, _)| key_matches(&m, key))
-        .max_by_key(|(key, _)| key.len()) // longest prefix wins (sonnet-4-5 over sonnet-4)
-        .map(|(_, p)| p)
+    m
 }
 
 /// Exact match, or `<key>-YYYYMMDD` / `<key>@YYYYMMDD`. A bare numeric suffix
@@ -154,7 +162,13 @@ fn key_matches(model: &str, key: &str) -> bool {
 /// unpriced. Unknown usage fields contribute nothing (absence ≠ zero — the
 /// result is a lower bound, and aggregation reports incompleteness separately).
 pub fn cost_usd(model: Option<&str>, usage: &Usage) -> Option<f64> {
-    let p = lookup(model?)?;
+    Some(price_usage(lookup(model?)?, usage))
+}
+
+/// USD for one request's `usage` at the given unit prices. Pure arithmetic shared
+/// by the free [`cost_usd`] and [`PricingTable::cost_usd`] so embedded and
+/// overridden pricing never diverge in how a request is costed (CLAUDE.md §8.7).
+fn price_usage(p: &ModelPricing, usage: &Usage) -> f64 {
     let per_m = |tokens: Option<u64>, rate: f64| tokens.unwrap_or(0) as f64 * rate / 1e6;
 
     let mut cost = per_m(usage.input, p.input)
@@ -169,7 +183,63 @@ pub fn cost_usd(model: Option<&str>, usage: &Usage) -> Option<f64> {
         (None, None) => per_m(usage.cache_creation, p.cache_write_5m),
         (m5, h1) => per_m(m5, p.cache_write_5m) + per_m(h1, p.cache_write_1h),
     };
-    Some(cost)
+    cost
+}
+
+/// A pricing lookup layering optional runtime `overrides` over the embedded
+/// [`SNAPSHOT`]. Pure and owned — no global state (CLAUDE.md §9). The binary builds
+/// one (from the `--refresh-pricing` cache / config) and threads it into the
+/// analysis passes; [`PricingTable::embedded`] is byte-for-byte identical to the
+/// free [`lookup`] / [`cost_usd`], so an empty table never changes a number.
+#[derive(Debug, Clone, Default)]
+pub struct PricingTable {
+    /// `(model-id-prefix, price)`, matched with the same prefix / longest-wins rule
+    /// as the snapshot and consulted BEFORE it (so an override wins on a tie).
+    overrides: Vec<(String, ModelPricing)>,
+}
+
+impl PricingTable {
+    /// Snapshot only — no overrides (identical to the free functions).
+    pub fn embedded() -> Self {
+        Self::default()
+    }
+
+    /// Snapshot plus the given overrides (keys lower-cased to match
+    /// [`normalize_model`]). Overrides take precedence over the snapshot.
+    pub fn with_overrides(overrides: Vec<(String, ModelPricing)>) -> Self {
+        let overrides = overrides
+            .into_iter()
+            .map(|(k, p)| (k.trim().to_ascii_lowercase(), p))
+            .collect();
+        Self { overrides }
+    }
+
+    /// Number of override entries (for the refresh report).
+    pub fn override_count(&self) -> usize {
+        self.overrides.len()
+    }
+
+    /// Look up a model: overrides first (longest-prefix wins), else the embedded
+    /// snapshot. `None` is still surfaced for unknown models, never guessed.
+    pub fn lookup(&self, model: &str) -> Option<&ModelPricing> {
+        if !self.overrides.is_empty() {
+            let m = normalize_model(model);
+            if let Some((_, p)) = self
+                .overrides
+                .iter()
+                .filter(|(key, _)| key_matches(&m, key))
+                .max_by_key(|(key, _)| key.len())
+            {
+                return Some(p);
+            }
+        }
+        lookup(model)
+    }
+
+    /// Cost of one request's usage under this table, or `None` when unpriced.
+    pub fn cost_usd(&self, model: Option<&str>, usage: &Usage) -> Option<f64> {
+        Some(price_usage(self.lookup(model?)?, usage))
+    }
 }
 
 #[cfg(test)]
