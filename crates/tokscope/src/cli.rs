@@ -99,13 +99,16 @@ fn parse_date(s: &str) -> Result<jiff::civil::Date, String> {
 
 pub fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
+    let config = crate::config::Config::load();
 
-    let adapter = match &cli.agent {
+    // Agent precedence: `--agent` > config `default_agent` > auto-detect.
+    let adapter = match cli.agent.as_deref().or(config.default_agent.as_deref()) {
         Some(id) => adapters::by_id(id)?,
         None => adapters::auto_detect().ok_or_else(|| {
             anyhow::anyhow!(
                 "no supported agent data found on this machine; \
-                 pass --agent <id> (known: claude-code, codex, cursor, gemini, copilot)"
+                 pass --agent <id> (known: claude-code, codex, cursor, gemini, copilot) \
+                 or set default_agent in config.toml"
             )
         })?,
     };

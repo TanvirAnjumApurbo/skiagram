@@ -29,6 +29,7 @@ ratatui = "0.29" # crossterm backend re-exported as `ratatui::crossterm`
 comfy-table = "7.1"
 owo-colors = { version = "4.1", features = ["supports-colors"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+toml = "0.8" # user config file (config.toml)
 # Flamegraph SVG export. default-features=false drops the CLI binary deps
 # (clap/env_logger) and the rayon/dashmap "multithreaded" collapse path we don't
 # use — we only call `flamegraph::from_lines` on stacks we fold ourselves.

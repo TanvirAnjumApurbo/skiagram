@@ -1,0 +1,5 @@
+# Redacted test fixture (CLAUDE.md §12) — exercises config `default_agent`.
+# Points the default agent at a still-stubbed adapter so the CLI's config-routing
+# is observable (the run reaches the stub's "not yet implemented") without
+# depending on any real agent data on the test machine.
+default_agent = "gemini"
