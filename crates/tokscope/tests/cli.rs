@@ -55,7 +55,11 @@ fn summary_json_has_exact_deduplicated_numbers() {
     // The dedup proof-of-work.
     assert_eq!(v["dedup"]["duplicate_lines_collapsed"], 2);
     assert_eq!(v["dedup"]["naive_known_tokens"], 30850);
-    assert_eq!(v["dedup"]["thinking_suspect_requests"], 1);
+    // Thinking ATTRIBUTION (§8.2): output already includes thinking, so we report
+    // it, never a phantom undercount. The fixture has one visible-thinking request.
+    assert_eq!(v["dedup"]["requests_with_thinking"], 1);
+    assert_eq!(v["dedup"]["requests_with_encrypted_thinking"], 0);
+    assert_eq!(v["dedup"]["thinking_chars_total"], 1658);
 
     // Sub-agent attribution (§8.3): child transcript folded into the parent row.
     assert_eq!(v["sidechain_totals"]["requests"], 1);

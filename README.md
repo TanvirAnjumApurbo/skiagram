@@ -28,10 +28,10 @@ are usually wrong, and because nobody tells you where the context window went:
    shows up as **2–10 lines sharing one `requestId`** (real data we measured: 642 lines for
    262 requests). Naive summation multiplies your spend by that factor. tokscope
    deduplicates per request, prices cache **reads**, **5-minute cache writes**, and
-   **1-hour cache writes** at their actual different rates, and flags requests where
-   extended-thinking tokens look excluded from `output_tokens` instead of silently
-   undercounting. Unknown fields are reported as *unknown* — never as zero, and unknown
-   models are never guessed a price.
+   **1-hour cache writes** at their actual different rates, and attributes extended-thinking
+   tokens (already included in `output_tokens`, verified) as a measured share of output
+   instead of inventing a phantom undercount. Unknown fields are reported as *unknown* —
+   never as zero, and unknown models are never guessed a price.
 
 2. **Context-bloat attribution** *(v0.2, in progress)*. Which MCP server, tool-definition
    set, or plugin is eating your window before you type a word.
@@ -80,7 +80,7 @@ TOTALS (deduplicated)
 
 requestId dedup: collapsed 2 duplicate line(s) into 6 request(s) — naive per-line
 summing would report 30,850 tokens (+71% overcount avoided)
-thinking-token reconciliation: 1 request(s) look UNDERCOUNTED — totals are a lower bound
+extended thinking: used in 1 of 6 request(s); already counted inside Output above — visible thinking ≈414 est. token(s)
 sub-agent share: 1,300 tokens across 1 request(s) ($0.0087) — attributed to parent sessions
 ```
 

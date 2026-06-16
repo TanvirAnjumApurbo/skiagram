@@ -71,8 +71,9 @@ pub struct HeavyRequest {
     pub token_share: f64,
     /// The request came from a sub-agent (sidechain) transcript.
     pub sidechain: bool,
-    /// Thinking present but `output_tokens` looks too small to include it (§8.2).
-    pub thinking_suspect: bool,
+    /// This request used extended thinking (its `output` already includes the
+    /// thinking tokens — §8.2).
+    pub has_thinking: bool,
 }
 
 /// Cumulative concentration: the top `request_fraction` of requests (by tokens)
@@ -106,8 +107,8 @@ pub struct RetryStorm {
     pub cost_usd: Option<f64>,
     /// Wall-clock span of the burst, in seconds (`ended_at - started_at`).
     pub span_seconds: i64,
-    /// Requests in the burst flagged as thinking-undercount-suspect (§8.2).
-    pub thinking_suspect_requests: u64,
+    /// Requests in the burst that used extended thinking (§8.2).
+    pub thinking_requests: u64,
 }
 
 /// Retry-storm + fat-tail findings over a set of deduplicated requests.
@@ -145,7 +146,7 @@ struct Req {
     tokens: u64,
     cost: Option<f64>,
     sidechain: bool,
-    thinking_suspect: bool,
+    has_thinking: bool,
 }
 
 /// `part / whole` as a fraction, with `whole == 0` yielding `0.0` (never NaN).
@@ -185,7 +186,7 @@ pub fn detect(
                 tokens,
                 cost,
                 sidechain: rec.sidechain,
-                thinking_suspect: rec.thinking_suspect,
+                has_thinking: rec.has_thinking,
             });
         }
     }
@@ -260,7 +261,7 @@ pub fn detect(
                 },
                 token_share: share(r.tokens, total_tokens),
                 sidechain: r.sidechain,
-                thinking_suspect: r.thinking_suspect,
+                has_thinking: r.has_thinking,
             }
         })
         .collect();
@@ -340,15 +341,15 @@ fn push_storm(out: &mut Vec<RetryStorm>, reqs: &[Req], run: &[(Timestamp, usize)
     let mut total_tokens = 0u64;
     let mut cost_sum = 0.0f64;
     let mut any_priced = false;
-    let mut thinking_suspect_requests = 0u64;
+    let mut thinking_requests = 0u64;
     for &(_, i) in run {
         total_tokens += reqs[i].tokens;
         if let Some(c) = reqs[i].cost {
             cost_sum += c;
             any_priced = true;
         }
-        if reqs[i].thinking_suspect {
-            thinking_suspect_requests += 1;
+        if reqs[i].has_thinking {
+            thinking_requests += 1;
         }
     }
 
@@ -361,7 +362,7 @@ fn push_storm(out: &mut Vec<RetryStorm>, reqs: &[Req], run: &[(Timestamp, usize)
         total_tokens,
         cost_usd: any_priced.then_some(cost_sum),
         span_seconds: ended_at.as_second() - started_at.as_second(),
-        thinking_suspect_requests,
+        thinking_requests,
     });
 }
 

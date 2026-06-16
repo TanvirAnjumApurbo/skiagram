@@ -80,7 +80,7 @@ pub struct Event {
     /// Short display-only snippet of visible text.
     pub content_summary: Option<String>,
     /// Approximate chars of generated content (text + thinking + tool-call JSON).
-    /// Heuristic input for thinking-token reconciliation only — never billed.
+    /// Heuristic input for thinking attribution / context estimation — never billed.
     pub content_chars: u64,
     /// Chars of extended-thinking text in this event — a SUBSET of `content_chars`
     /// (0 when none, or when the thinking block was encrypted and thus
@@ -126,8 +126,12 @@ pub struct Usage {
     /// 1-hour-TTL share of `cache_creation` (priced 2x input vs 1.25x for 5m).
     pub cache_creation_1h: Option<u64>,
     pub cache_read: Option<u64>,
-    /// Extended-thinking tokens. Claude Code does not report these separately —
-    /// stays `None` there; the dedup pass flags likely undercounts instead
+    /// Extended-thinking (reasoning) tokens, ONLY when the agent reports them as a
+    /// SEPARATE, disjoint count (Codex `reasoning_output_tokens`, kept out of
+    /// `output`). Claude Code does NOT report them separately — there, thinking is
+    /// already INCLUDED in `output` (verified v2.1.178), so this stays `None` to
+    /// avoid double-counting in [`Usage::known_total`]; thinking is surfaced as a
+    /// char-measured attribution of `output` in `analysis::dedup` instead
     /// (CLAUDE.md §8.2).
     pub thinking: Option<u64>,
 }

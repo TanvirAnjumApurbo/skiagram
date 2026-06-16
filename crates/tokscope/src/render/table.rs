@@ -116,15 +116,24 @@ fn accounting_notes(summary: &Summary) {
             overcount
         );
     }
-    if d.thinking_suspect_requests > 0 {
-        println!(
-            "{}",
+    if d.requests_with_thinking > 0 {
+        let est = d.thinking_tokens_estimate();
+        let enc = d.requests_with_encrypted_thinking;
+        let detail = if enc > 0 {
             format!(
-                "thinking-token reconciliation: {} request(s) look UNDERCOUNTED \
-                 (thinking present but excluded from output_tokens) — totals are a lower bound",
-                d.thinking_suspect_requests
+                " — {} had encrypted/unmeasurable thinking, so the visible ≈{} est. \
+                 token(s) is a lower bound",
+                fmt_count(enc),
+                fmt_count(est),
             )
-            .if_supports_color(Stream::Stdout, |t| t.yellow())
+        } else {
+            format!(" — visible thinking ≈{} est. token(s)", fmt_count(est))
+        };
+        println!(
+            "extended thinking: used in {} of {} request(s); already counted inside Output above{}",
+            fmt_count(d.requests_with_thinking),
+            fmt_count(summary.totals.requests),
+            detail,
         );
     }
     if summary.sidechain_totals.requests > 0 {

@@ -18,8 +18,13 @@
 //!   zeroed usage that never hit the API; their usage is dropped.
 //! - Sub-agent spawns are `tool_use` blocks named `Task` (legacy) or `Agent`
 //!   (current), with `input.description` / `input.subagent_type`.
-//! - Thinking blocks may be encrypted (`"thinking": ""` + `signature`), so
-//!   thinking length is not always measurable from the transcript.
+//! - `output_tokens` ALREADY includes extended-thinking tokens (VERIFIED on real
+//!   v2.1.178 data: thinking-only requests report output far larger than the
+//!   visible text alone) — do NOT add an estimate on top, or `known_total`
+//!   double-counts. Thinking blocks are frequently encrypted (`"thinking": ""` +
+//!   `signature`; ~85% of thinking requests on the sampled machine), so the
+//!   thinking SHARE of output is usually unmeasurable; that is surfaced honestly
+//!   (encrypted-thinking count), never guessed.
 //! - Bookkeeping line types carrying no spend (VERIFIED on real files): `summary`,
 //!   `mode`, `permission-mode`, `last-prompt`, `file-history-snapshot`,
 //!   `ai-title`, `custom-title`, `queue-operation`, `agent-name` — ignored without
@@ -581,8 +586,10 @@ impl RawUsage {
                 .as_ref()
                 .and_then(|c| c.ephemeral_1h_input_tokens),
             cache_read: self.cache_read_input_tokens,
-            // Claude Code never reports thinking tokens separately (§8.2);
-            // dedup flags suspected undercounts instead.
+            // Claude Code's `output_tokens` ALREADY includes extended-thinking
+            // tokens (verified v2.1.178) — keep this None so `known_total` does not
+            // double-count; thinking is surfaced as a char-measured attribution of
+            // output in `analysis::dedup` instead (CLAUDE.md §8.2).
             thinking: None,
         }
     }

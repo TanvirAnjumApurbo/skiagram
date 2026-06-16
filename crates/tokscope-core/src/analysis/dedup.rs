@@ -12,10 +12,13 @@
 //! streaming, so MAX recovers the final per-request value in both cases without
 //! double counting. Events with no `requestId` are never merged with each other.
 //!
-//! This pass also performs thinking-token reconciliation (§8.2): `output_tokens`
-//! may exclude extended-thinking tokens, so requests whose visible content is
-//! far larger than the reported output are flagged rather than silently
-//! undercounted.
+//! This pass also performs thinking ATTRIBUTION (§8.2). Claude Code's
+//! `output_tokens` ALREADY includes extended-thinking tokens (verified on real
+//! data — thinking-only requests report output far larger than their visible
+//! text), so there is no undercount to "fix". Instead we measure the visible
+//! thinking chars per request (the basis for an estimated thinking-token SHARE of
+//! output) and flag requests whose thinking was encrypted/redacted, where that
+//! share is unmeasurable (absence ≠ zero, §8.5).
 
 use std::collections::HashMap;
 
@@ -39,11 +42,18 @@ pub struct UsageRecord {
     pub usage: Usage,
     /// Request belongs to a sub-agent (sidechain) transcript.
     pub sidechain: bool,
-    /// Thinking blocks were present but the reported output looks too small to
-    /// include them: output < (content chars / 4) / 2. Surfaced, not "fixed".
-    pub thinking_suspect: bool,
-    /// Thinking blocks were present at all (they may be encrypted and thus
-    /// unmeasurable, in which case `thinking_suspect` can stay false).
+    /// Visible extended-thinking chars measured across this request's lines — the
+    /// basis for thinking ATTRIBUTION. These tokens are ALREADY counted inside
+    /// `usage.output` (Claude Code, verified), so this answers "how much of output
+    /// was thinking", never an addition to the billable total. 0 when there was no
+    /// thinking, or when every thinking block was encrypted (`thinking_encrypted`).
+    pub thinking_chars: u64,
+    /// Thinking blocks were present but none were measurable (encrypted/redacted:
+    /// `"thinking":""` + signature). The thinking share of output is unknown here —
+    /// surfaced as such, never guessed (CLAUDE.md §8.5). On the sampled machine
+    /// ~85% of thinking requests were encrypted, so this is the common case.
+    pub thinking_encrypted: bool,
+    /// Thinking blocks were present at all (measurable or encrypted).
     pub has_thinking: bool,
 }
 
@@ -56,9 +66,26 @@ pub struct DedupStats {
     /// What naive per-line summation would have reported (for the overcount
     /// stat shown to the user).
     pub naive_known_tokens: u64,
-    pub thinking_suspect_requests: u64,
     /// Requests that carried thinking blocks (measurable or encrypted).
     pub requests_with_thinking: u64,
+    /// Requests whose thinking was present but entirely encrypted/unmeasurable, so
+    /// the thinking share of their output can't be measured (absence ≠ zero, §8.5).
+    pub requests_with_encrypted_thinking: u64,
+    /// Total measured visible thinking chars — the basis for an estimated
+    /// thinking-token attribution. Already included in `output`; never added to
+    /// billable totals.
+    pub thinking_chars_total: u64,
+}
+
+impl DedupStats {
+    /// Estimated thinking tokens from measured visible thinking chars — a LOWER
+    /// BOUND: extended-thinking text tokenizes denser than the `chars/4` rule of
+    /// thumb (~1–3 chars/token observed), and encrypted thinking contributes 0
+    /// measurable chars though it still costs output tokens. These tokens are
+    /// already inside `output` and are never billed again.
+    pub fn thinking_tokens_estimate(&self) -> u64 {
+        self.thinking_chars_total / EST_CHARS_PER_TOKEN
+    }
 }
 
 #[derive(Default)]
@@ -68,7 +95,7 @@ struct Acc {
     request_id: Option<String>,
     ts: Option<Timestamp>,
     lines: u64,
-    content_chars: u64,
+    thinking_chars: u64,
     has_thinking: bool,
     sidechain: bool,
 }
@@ -122,8 +149,8 @@ pub fn dedup_session(session: &Session, since: Option<Date>) -> (Vec<UsageRecord
             (Some(a), Some(b)) => Some(a.min(b)),
             (a, b) => a.or(b),
         };
-        // Content is spread across the request's lines — sum it.
-        acc.content_chars += event.content_chars;
+        // Thinking is spread across the request's lines — sum what's measurable.
+        acc.thinking_chars += event.thinking_chars;
         acc.has_thinking |= event.has_thinking;
         acc.sidechain |= event.sidechain;
     }
@@ -132,17 +159,17 @@ pub fn dedup_session(session: &Session, since: Option<Date>) -> (Vec<UsageRecord
         .into_iter()
         .filter_map(|key| {
             let acc = groups.remove(&key)?;
-            let thinking_suspect = acc.has_thinking
-                && acc
-                    .usage
-                    .output
-                    .is_some_and(|out| out < (acc.content_chars / EST_CHARS_PER_TOKEN) / 2);
-            if thinking_suspect {
-                stats.thinking_suspect_requests += 1;
-            }
+            let thinking_chars = acc.thinking_chars;
+            // Thinking present but nothing measurable -> encrypted/redacted: the
+            // thinking share of output is unknown, surfaced not guessed (§8.5).
+            let thinking_encrypted = acc.has_thinking && thinking_chars == 0;
             if acc.has_thinking {
                 stats.requests_with_thinking += 1;
             }
+            if thinking_encrypted {
+                stats.requests_with_encrypted_thinking += 1;
+            }
+            stats.thinking_chars_total += thinking_chars;
             Some(UsageRecord {
                 session_id: session.id.clone(),
                 parent_session: session.parent_session.clone(),
@@ -152,7 +179,8 @@ pub fn dedup_session(session: &Session, since: Option<Date>) -> (Vec<UsageRecord
                 ts: acc.ts,
                 usage: acc.usage,
                 sidechain: acc.sidechain || session.parent_session.is_some(),
-                thinking_suspect,
+                thinking_chars,
+                thinking_encrypted,
                 has_thinking: acc.has_thinking,
             })
         })
@@ -261,22 +289,44 @@ mod tests {
         assert_eq!(stats.naive_known_tokens, 0);
     }
 
-    /// §8.2: thinking present + implausibly small output => flag, don't hide.
+    /// §8.2: thinking is ATTRIBUTED, not "reconciled". `output_tokens` already
+    /// includes thinking, so we measure visible thinking chars and flag the
+    /// encrypted case (share unmeasurable) — we never invent an undercount.
     #[test]
-    fn thinking_undercount_is_flagged() {
-        let mut suspect = assistant(Some("req_t"), Some(usage(1500, 60, 0, 0)));
-        suspect.has_thinking = true;
-        suspect.content_chars = 1600; // est ~400 tokens of content vs 60 reported
+    fn thinking_is_attributed_and_encrypted_is_flagged() {
+        // Visible thinking: measurable chars, already inside the 800 output tokens.
+        let mut visible = assistant(Some("req_vis"), Some(usage(1500, 800, 0, 0)));
+        visible.has_thinking = true;
+        visible.thinking_chars = 1600; // ~400 est. thinking tokens (a lower bound)
 
-        let mut honest = assistant(Some("req_ok"), Some(usage(1500, 500, 0, 0)));
-        honest.has_thinking = true;
-        honest.content_chars = 1600; // 500 >= 200 -> plausible
+        // Encrypted thinking: present but nothing measurable.
+        let mut encrypted = assistant(Some("req_enc"), Some(usage(1500, 500, 0, 0)));
+        encrypted.has_thinking = true;
+        encrypted.thinking_chars = 0;
 
-        let (records, stats) = dedup_session(&session(vec![suspect, honest]), None);
-        assert_eq!(stats.thinking_suspect_requests, 1);
+        let (records, stats) = dedup_session(&session(vec![visible, encrypted]), None);
         assert_eq!(stats.requests_with_thinking, 2);
-        assert!(records[0].thinking_suspect);
-        assert!(!records[1].thinking_suspect);
+        assert_eq!(stats.requests_with_encrypted_thinking, 1);
+        assert_eq!(stats.thinking_chars_total, 1600);
+        assert_eq!(
+            stats.thinking_tokens_estimate(),
+            400,
+            "1600 / 4, a lower bound"
+        );
+
+        let vis = records
+            .iter()
+            .find(|r| r.request_id.as_deref() == Some("req_vis"))
+            .unwrap();
+        let enc = records
+            .iter()
+            .find(|r| r.request_id.as_deref() == Some("req_enc"))
+            .unwrap();
+        assert_eq!(vis.thinking_chars, 1600);
+        assert!(!vis.thinking_encrypted, "visible thinking is measurable");
+        assert!(enc.has_thinking);
+        assert!(enc.thinking_encrypted, "0 measurable chars -> encrypted");
+        assert_eq!(enc.thinking_chars, 0);
     }
 
     #[test]

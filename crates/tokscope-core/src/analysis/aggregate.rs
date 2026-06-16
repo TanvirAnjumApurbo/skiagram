@@ -168,8 +168,9 @@ pub fn aggregate(
         let (records, stats) = dedup_session(session, filter.since);
         summary.dedup.duplicate_lines_collapsed += stats.duplicate_lines_collapsed;
         summary.dedup.naive_known_tokens += stats.naive_known_tokens;
-        summary.dedup.thinking_suspect_requests += stats.thinking_suspect_requests;
         summary.dedup.requests_with_thinking += stats.requests_with_thinking;
+        summary.dedup.requests_with_encrypted_thinking += stats.requests_with_encrypted_thinking;
+        summary.dedup.thinking_chars_total += stats.thinking_chars_total;
 
         // Tool + compaction stats come straight from events (they carry no usage).
         for event in &session.events {

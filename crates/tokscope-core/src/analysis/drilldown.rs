@@ -48,11 +48,14 @@ pub struct Turn {
     pub summary: Option<String>,
     /// Tool names invoked in this request, in first-seen order (deduplicated).
     pub tools: Vec<String>,
-    /// Thinking blocks were present (possibly encrypted/unmeasurable).
+    /// Thinking blocks were present (measurable or encrypted).
     pub has_thinking: bool,
-    /// Thinking present but `output_tokens` looks too small to include it — the
-    /// usage is a likely undercount, surfaced not hidden (§8.2).
-    pub thinking_suspect: bool,
+    /// Visible thinking chars in this request — already inside `usage.output`
+    /// (Claude Code), surfaced for attribution, never billed again (§8.2).
+    pub thinking_chars: u64,
+    /// Thinking present but encrypted/unmeasurable: the thinking share of output
+    /// is unknown (absence ≠ zero, §8.5).
+    pub thinking_encrypted: bool,
 }
 
 /// Everything the drill-down needs about one session row: the same folded,
@@ -151,7 +154,8 @@ fn session_turns(session: &Session, filter: &Filter, pricing: &PricingTable) -> 
                 summary,
                 tools,
                 has_thinking: rec.has_thinking,
-                thinking_suspect: rec.thinking_suspect,
+                thinking_chars: rec.thinking_chars,
+                thinking_encrypted: rec.thinking_encrypted,
             }
         })
         .collect()

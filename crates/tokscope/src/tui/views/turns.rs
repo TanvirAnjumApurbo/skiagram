@@ -41,15 +41,16 @@ fn fmt_time(ts: Option<jiff::Timestamp>) -> String {
     }
 }
 
-/// Space-joined status markers: `↳sub` for sub-agent turns, `⚠think`/`think`
-/// for thinking presence/undercount-suspect.
-fn fmt_flags(sidechain: bool, has_thinking: bool, thinking_suspect: bool) -> String {
+/// Space-joined status markers: `↳sub` for sub-agent turns, `think?` when thinking
+/// was encrypted/unmeasurable, else `think` when thinking was present (its tokens
+/// are already inside Output).
+fn fmt_flags(sidechain: bool, has_thinking: bool, thinking_encrypted: bool) -> String {
     let mut flags = Vec::new();
     if sidechain {
         flags.push("↳sub");
     }
-    if thinking_suspect {
-        flags.push("⚠think");
+    if thinking_encrypted {
+        flags.push("think?");
     } else if has_thinking {
         flags.push("think");
     }
@@ -98,7 +99,7 @@ pub fn draw(frame: &mut Frame, detail: &SessionDetail, state: &mut TableState) {
                 fmt_known(t.usage.cache_read),
                 fmt_known(t.usage.cache_creation),
                 t.cost_usd.map(fmt_cost).unwrap_or_else(|| "?".into()),
-                fmt_flags(t.sidechain, t.has_thinking, t.thinking_suspect),
+                fmt_flags(t.sidechain, t.has_thinking, t.thinking_encrypted),
                 truncate(&detail_text, 36),
             ])
         });

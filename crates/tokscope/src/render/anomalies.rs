@@ -121,7 +121,7 @@ fn hms(ts: jiff::Timestamp) -> String {
 /// plain text, so it can't desync comfy-table's column-width math the way
 /// embedded ANSI color codes would (this crate doesn't enable comfy-table's
 /// `custom_styling` feature).
-fn flags(sidechain: bool, thinking_suspect: bool, heaviest_rank1: bool) -> String {
+fn flags(sidechain: bool, has_thinking: bool, heaviest_rank1: bool) -> String {
     let mut f = Vec::new();
     if heaviest_rank1 {
         f.push("★");
@@ -129,8 +129,8 @@ fn flags(sidechain: bool, thinking_suspect: bool, heaviest_rank1: bool) -> Strin
     if sidechain {
         f.push("↳sub");
     }
-    if thinking_suspect {
-        f.push("⚠think");
+    if has_thinking {
+        f.push("think");
     }
     f.join(" ")
 }
@@ -222,7 +222,7 @@ fn heavy_row(h: &HeavyRequest, is_top: bool) -> Vec<Cell> {
         num(pct(h.token_share)),
         num(opt_pct(h.cost_share)),
         num(opt_cost(h.cost_usd)),
-        Cell::new(flags(h.sidechain, h.thinking_suspect, is_top)),
+        Cell::new(flags(h.sidechain, h.has_thinking, is_top)),
     ]
 }
 
@@ -341,9 +341,9 @@ mod tests {
     fn flags_combine_star_sidechain_and_thinking() {
         assert_eq!(flags(false, false, false), "");
         assert_eq!(flags(true, false, false), "↳sub");
-        assert_eq!(flags(false, true, false), "⚠think");
-        assert_eq!(flags(true, true, false), "↳sub ⚠think");
+        assert_eq!(flags(false, true, false), "think");
+        assert_eq!(flags(true, true, false), "↳sub think");
         assert_eq!(flags(false, false, true), "★");
-        assert_eq!(flags(true, true, true), "★ ↳sub ⚠think");
+        assert_eq!(flags(true, true, true), "★ ↳sub think");
     }
 }
