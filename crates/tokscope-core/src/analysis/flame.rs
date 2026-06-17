@@ -501,7 +501,7 @@ mod tests {
     fn cost_metric_skips_and_counts_unpriced() {
         // Pure unpriced session: no stacks, one unpriced request.
         let mut unp = turn("u", usage(5_000, 100, 0, 0));
-        unp.model = Some("claude-opus-4-8".into()); // post-snapshot, unpriced
+        unp.model = Some("claude-opus-5-0".into()); // post-snapshot, unpriced
         let only_unpriced = session("u", None, vec![unp.clone()]);
         let d = fold(
             &[only_unpriced],
@@ -537,7 +537,7 @@ mod tests {
     #[test]
     fn tokens_metric_ignores_pricing() {
         let mut unp = turn("u", usage(5_000, 100, 0, 0));
-        unp.model = Some("claude-opus-4-8".into());
+        unp.model = Some("claude-opus-5-0".into());
         let s = session("s", None, vec![unp]);
         let d = fold(
             &[s],
@@ -548,7 +548,7 @@ mod tests {
         );
         assert_eq!(d.unpriced_requests, 0);
         assert_eq!(
-            leaf_value(&d, "proj", "s", "claude-opus-4-8", "input"),
+            leaf_value(&d, "proj", "s", "claude-opus-5-0", "input"),
             Some(5_000)
         );
     }

@@ -10,8 +10,9 @@
 //! - cache-read and cache-creation are priced separately (§8.4), and the 5m/1h
 //!   write TTLs differ too — never lump them.
 //! - models NOT in this table are never guessed at; they surface as "unpriced"
-//!   (that currently includes post-snapshot models like `claude-opus-4-8` and
-//!   `claude-fable-5`, whose prices this snapshot does not know).
+//!   (e.g. non-Anthropic models like `gpt-*`/`gemini-*`, or a future Claude
+//!   generation past this snapshot — a bare numeric suffix like `claude-opus-4-9`
+//!   must NOT inherit `claude-opus-4`'s price).
 //! - every cost figure traces to (model, token type, unit price) via this table —
 //!   no magic numbers anywhere else (§8.7).
 //!
@@ -35,6 +36,36 @@ pub struct ModelPricing {
 /// suffix is not (so `claude-opus-4-8` does NOT silently price as
 /// `claude-opus-4`).
 pub const SNAPSHOT: &[(&str, ModelPricing)] = &[
+    (
+        "claude-fable-5",
+        ModelPricing {
+            input: 10.0,
+            output: 50.0,
+            cache_read: 1.0,
+            cache_write_5m: 12.50,
+            cache_write_1h: 20.0,
+        },
+    ),
+    (
+        "claude-mythos-5",
+        ModelPricing {
+            input: 10.0,
+            output: 50.0,
+            cache_read: 1.0,
+            cache_write_5m: 12.50,
+            cache_write_1h: 20.0,
+        },
+    ),
+    (
+        "claude-sonnet-4-6",
+        ModelPricing {
+            input: 3.0,
+            output: 15.0,
+            cache_read: 0.30,
+            cache_write_5m: 3.75,
+            cache_write_1h: 6.0,
+        },
+    ),
     (
         "claude-sonnet-4-5",
         ModelPricing {
@@ -63,6 +94,36 @@ pub const SNAPSHOT: &[(&str, ModelPricing)] = &[
             cache_read: 0.30,
             cache_write_5m: 3.75,
             cache_write_1h: 6.0,
+        },
+    ),
+    (
+        "claude-opus-4-8",
+        ModelPricing {
+            input: 5.0,
+            output: 25.0,
+            cache_read: 0.50,
+            cache_write_5m: 6.25,
+            cache_write_1h: 10.0,
+        },
+    ),
+    (
+        "claude-opus-4-7",
+        ModelPricing {
+            input: 5.0,
+            output: 25.0,
+            cache_read: 0.50,
+            cache_write_5m: 6.25,
+            cache_write_1h: 10.0,
+        },
+    ),
+    (
+        "claude-opus-4-6",
+        ModelPricing {
+            input: 5.0,
+            output: 25.0,
+            cache_read: 0.50,
+            cache_write_5m: 6.25,
+            cache_write_1h: 10.0,
         },
     ),
     (
@@ -257,11 +318,31 @@ mod tests {
 
     #[test]
     fn unknown_models_are_never_guessed() {
-        // A newer generation must NOT silently take the older generation's price.
-        assert!(lookup("claude-opus-4-8").is_none());
-        assert!(lookup("claude-fable-5").is_none());
+        // A newer generation must NOT silently take an existing generation's price
+        // (a bare numeric suffix is a different model, even when the base exists).
+        assert!(lookup("claude-opus-4-9").is_none()); // not claude-opus-4
+        assert!(lookup("claude-opus-5-0").is_none());
+        assert!(lookup("claude-fable-6").is_none());
         assert!(lookup("<synthetic>").is_none());
         assert!(lookup("gpt-yolo").is_none());
+    }
+
+    #[test]
+    fn current_models_from_official_snapshot_are_priced() {
+        // The 2026-06 lineup pasted from Anthropic's published table. Asserting the
+        // exact input also guards the generation boundary: opus-4-8 is $5 input, so
+        // if it wrongly matched claude-opus-4 it would read $15 instead.
+        assert_eq!(lookup("claude-opus-4-8").map(|p| p.input), Some(5.0));
+        assert_eq!(lookup("claude-opus-4-7").map(|p| p.input), Some(5.0));
+        assert_eq!(lookup("claude-opus-4-6").map(|p| p.input), Some(5.0));
+        assert_eq!(lookup("claude-sonnet-4-6").map(|p| p.output), Some(15.0));
+        assert_eq!(lookup("claude-fable-5").map(|p| p.output), Some(50.0));
+        assert_eq!(lookup("claude-mythos-5").map(|p| p.input), Some(10.0));
+        // Cache rates follow Anthropic's multipliers (fable-5: 0.1x/1.25x/2x of $10).
+        let fable = lookup("claude-fable-5").unwrap();
+        assert_eq!(fable.cache_read, 1.0);
+        assert_eq!(fable.cache_write_5m, 12.50);
+        assert_eq!(fable.cache_write_1h, 20.0);
     }
 
     #[test]

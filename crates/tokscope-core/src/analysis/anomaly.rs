@@ -562,7 +562,7 @@ mod tests {
     #[test]
     fn unpriced_requests_are_flagged_not_guessed() {
         let mut unp = turn("u", "2026-06-02T10:00:00Z", 5_000, 0);
-        unp.model = Some("claude-opus-4-8".into()); // post-snapshot, unpriced
+        unp.model = Some("claude-opus-5-0".into()); // post-snapshot, unpriced
         let priced = turn("p", "2026-06-02T11:00:00Z", 1_000, 0);
         let s = session("s", None, vec![unp, priced]);
         let r = detect(

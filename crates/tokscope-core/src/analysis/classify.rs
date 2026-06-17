@@ -633,7 +633,7 @@ mod tests {
     /// An assistant turn whose model is not in the pricing snapshot.
     fn unpriced_turn(request_id: &str, ts: &str, input: u64) -> Event {
         let mut e = turn(request_id, ts, input, &[]);
-        e.model = Some("claude-opus-4-8".into()); // post-snapshot, unpriceable
+        e.model = Some("claude-opus-5-0".into()); // post-snapshot, unpriceable
         e
     }
 

@@ -372,7 +372,7 @@ mod tests {
             vec![turn("r", "2026-06-02T10:00:00Z", usage(1000, 0))],
         );
         let mut unp = turn("r2", "2026-06-02T10:00:00Z", usage(1000, 0));
-        unp.model = Some("claude-opus-4-8".into()); // post-snapshot, unpriced
+        unp.model = Some("claude-opus-5-0".into()); // post-snapshot, unpriced
         let unpriced = session("b", None, vec![unp]);
 
         let details = build_details(
