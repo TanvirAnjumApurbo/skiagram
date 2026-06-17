@@ -65,8 +65,8 @@ tokscope flame [--out FILE] [--metric tokens|cost] [--fold]   # flamegraph SVG e
 tokscope tui                                              # interactive browser
 ```
 
-- `--agent` — `claude-code` (implemented), `codex`, `cursor`, `gemini`, `copilot`
-  (stubs that fail loudly). Default: auto-detect.
+- `--agent` — `claude-code`, `codex`, `gemini`, `copilot` (implemented), or `cursor`
+  (deferred stub that fails loudly). Default: auto-detect.
 - `--since` — only count usage on/after this UTC date.
 - `TOKSCOPE_LOG=debug` — see which lines were skipped leniently and why.
 - `CLAUDE_CONFIG_DIR` — override the Claude Code data root (default `~/.claude`).
@@ -126,11 +126,11 @@ many skills were listed, and how many times the context filled up and got compac
 
 | Agent | Status |
 |---|---|
-| Claude Code | ✅ discover + parse + dedup + sub-agent folding |
-| Codex CLI | 🔜 stub (`detect` only) |
-| Cursor | 🔜 stub |
-| Gemini CLI | 🔜 stub |
-| Copilot CLI | 🔜 stub |
+| Claude Code | ✅ discover + parse + dedup + sub-agent folding + thinking attribution |
+| Codex CLI | ✅ real token reconciliation (cumulative vs per-request delta) |
+| Gemini CLI | ✅ real per-message tokens, dedup by message id, disjoint thoughts |
+| Copilot CLI | ✅ structural (Copilot logs no per-request billing tokens) |
+| Cursor | ⬜ deferred (per-request `tokenCount` ~99% zeroed; needs bundled `rusqlite`) |
 
 ## Privacy
 

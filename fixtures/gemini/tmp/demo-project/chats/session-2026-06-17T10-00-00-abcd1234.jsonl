@@ -1,0 +1,10 @@
+{"sessionId":"abcd1234-1111-2222-3333-444455556666","projectHash":"deadbeefcafe0001","startTime":"2026-06-17T10:00:00.000Z","lastUpdated":"2026-06-17T10:00:05.000Z","kind":"main"}
+{"$set":{"messages":[{"id":"u0","timestamp":"2026-06-17T10:00:00.100Z","type":"user","content":[{"text":"<session_context>synthetic context, ignored</session_context>"}]}]}}
+{"id":"u1","timestamp":"2026-06-17T10:00:01.000Z","type":"user","content":[{"text":"summarize the build"}]}
+{"id":"g1","timestamp":"2026-06-17T10:00:02.000Z","type":"gemini","content":"","thoughts":[{"subject":"Planning","description":"Outline the summary approach.","timestamp":"2026-06-17T10:00:01.900Z"}],"tokens":{"input":1000,"output":50,"cached":200,"thoughts":80,"tool":0,"total":1130},"model":"gemini-3-flash-preview"}
+{"id":"g1","timestamp":"2026-06-17T10:00:02.500Z","type":"gemini","content":"","thoughts":[{"subject":"Planning","description":"Outline the summary approach.","timestamp":"2026-06-17T10:00:01.900Z"}],"tokens":{"input":1000,"output":50,"cached":200,"thoughts":80,"tool":0,"total":1130},"model":"gemini-3-flash-preview","toolCalls":[{"id":"tc1","name":"mcp__acme-db__query","args":{"sql":"select 1"},"status":"success"}]}
+{"id":"u2","timestamp":"2026-06-17T10:00:03.000Z","type":"user","content":[{"functionResponse":{"id":"tc1","name":"mcp__acme-db__query","response":{"output":"one row"}}}]}
+{"id":"g2","timestamp":"2026-06-17T10:00:04.000Z","type":"gemini","content":"Here is the build summary: all green.","thoughts":[],"tokens":{"input":1200,"output":30,"cached":1100,"thoughts":0,"tool":0,"total":1230},"model":"gemini-3-flash-preview"}
+{"id":"i1","timestamp":"2026-06-17T10:00:04.500Z","type":"info","content":[{"text":"Model set to gemini-3-flash-preview"}]}
+{"id":"z1","timestamp":"2026-06-17T10:00:05.000Z","type":"telemetry_blob","data":123}
+{"id":"x1","type":"gemini",

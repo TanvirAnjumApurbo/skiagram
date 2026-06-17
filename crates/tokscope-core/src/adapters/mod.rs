@@ -26,14 +26,15 @@ pub trait Adapter {
     fn parse(&self, r: &SessionRef) -> anyhow::Result<Session>;
 }
 
-/// Every known adapter, in priority order (fully implemented ones first).
+/// Every known adapter, in priority order (fully implemented ones first; the
+/// deferred Cursor stub is last so a real coding-agent wins auto-detect).
 pub fn all() -> Vec<Box<dyn Adapter>> {
     vec![
         Box::new(claude_code::ClaudeCode),
         Box::new(codex::Codex),
-        Box::new(cursor::Cursor),
         Box::new(gemini::Gemini),
         Box::new(copilot::Copilot),
+        Box::new(cursor::Cursor),
     ]
 }
 
