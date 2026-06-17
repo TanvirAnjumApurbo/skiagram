@@ -1,8 +1,8 @@
-# tokscope workspace — see CLAUDE.md for architecture and correctness rules.
+# skiagram workspace — see CLAUDE.md for architecture and correctness rules.
 
 [workspace]
 resolver = "2"
-members = ["crates/tokscope-core", "crates/tokscope"]
+members = ["crates/skiagram-core", "crates/skiagram"]
 
 [workspace.package]
 version = "0.1.0"
@@ -11,7 +11,7 @@ license = "MIT"
 rust-version = "1.85"
 
 [workspace.dependencies]
-tokscope-core = { path = "crates/tokscope-core", version = "0.1.0" }
+skiagram-core = { path = "crates/skiagram-core", version = "0.1.0" }
 
 # Core
 anyhow = "1.0"

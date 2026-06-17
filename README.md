@@ -1,4 +1,4 @@
-# tokscope
+# skiagram
 
 > **Status: v0.4 (feature-complete)** · name is a placeholder (will be renamed before publishing)
 
@@ -10,23 +10,23 @@ Reads the session files your agent already writes — **read-only, fully offline
 leaves your machine**.
 
 ```
-$ tokscope            # spend summary (auto-detects your agent)
-$ tokscope tui        # interactive session browser
-$ tokscope context    # what's filling your context window, and why
-$ tokscope classify   # spend by what you were doing (debugging / features / …)
-$ tokscope flame --out spend.svg   # flamegraph of where the tokens went
-$ tokscope summary --json --since 2026-06-01
+$ skiagram            # spend summary (auto-detects your agent)
+$ skiagram tui        # interactive session browser
+$ skiagram context    # what's filling your context window, and why
+$ skiagram classify   # spend by what you were doing (debugging / features / …)
+$ skiagram flame --out spend.svg   # flamegraph of where the tokens went
+$ skiagram summary --json --since 2026-06-01
 ```
 
 ## Why another usage tool?
 
-Plain usage tracking is a solved problem. tokscope exists because the *numbers themselves*
+Plain usage tracking is a solved problem. skiagram exists because the *numbers themselves*
 are usually wrong, and because nobody tells you where the context window went:
 
 1. **Correct accounting.** On-disk logs are unreliable: agents write one JSONL line per
    content block, and every line repeats the request's token usage. A single API request
    shows up as **2–10 lines sharing one `requestId`** (real data we measured: 642 lines for
-   262 requests). Naive summation multiplies your spend by that factor. tokscope
+   262 requests). Naive summation multiplies your spend by that factor. skiagram
    deduplicates per request, prices cache **reads**, **5-minute cache writes**, and
    **1-hour cache writes** at their actual different rates, and attributes extended-thinking
    tokens (already included in `output_tokens`, verified) as a measured share of output
@@ -34,21 +34,21 @@ are usually wrong, and because nobody tells you where the context window went:
    never as zero, and unknown models are never guessed a price.
 
 2. **Context-bloat attribution.** Which MCP server, tool-definition set, or plugin is eating
-   your window before you type a word (`tokscope context`).
+   your window before you type a word (`skiagram context`).
 
 3. **Sub-agent attribution.** Spawned sub-agents (`Task`/`Agent` tool) write their own
-   transcripts; most tools drop or misattribute that spend. tokscope folds it back into the
+   transcripts; most tools drop or misattribute that spend. skiagram folds it back into the
    parent session and shows the sub-agent share.
 
 4. **Drill-down UX.** A navigable TUI and a literal flamegraph SVG export
-   (`tokscope flame`).
+   (`skiagram flame`).
 
 ## Install
 
 Prebuilt binaries are planned. For now (any platform with Rust ≥ 1.85):
 
 ```
-cargo install --path crates/tokscope
+cargo install --path crates/skiagram
 ```
 
 Single static binary, no runtime, no daemon, no network.
@@ -56,19 +56,19 @@ Single static binary, no runtime, no daemon, no network.
 ## Usage
 
 ```
-tokscope [summary] [--agent <id>] [--since YYYY-MM-DD]   # plain tables (default)
-tokscope summary --json                                   # machine-readable
-tokscope context [--json]                                 # context-window breakdown
-tokscope anomalies [--json]                               # fat-tail requests + retry storms
-tokscope classify [--json]                                # spend by task type (heuristic)
-tokscope flame [--out FILE] [--metric tokens|cost] [--fold]   # flamegraph SVG export
-tokscope tui                                              # interactive browser
+skiagram [summary] [--agent <id>] [--since YYYY-MM-DD]   # plain tables (default)
+skiagram summary --json                                   # machine-readable
+skiagram context [--json]                                 # context-window breakdown
+skiagram anomalies [--json]                               # fat-tail requests + retry storms
+skiagram classify [--json]                                # spend by task type (heuristic)
+skiagram flame [--out FILE] [--metric tokens|cost] [--fold]   # flamegraph SVG export
+skiagram tui                                              # interactive browser
 ```
 
 - `--agent` — `claude-code`, `codex`, `gemini`, `copilot` (implemented), or `cursor`
   (deferred stub that fails loudly). Default: auto-detect.
 - `--since` — only count usage on/after this UTC date.
-- `TOKSCOPE_LOG=debug` — see which lines were skipped leniently and why.
+- `SKIAGRAM_LOG=debug` — see which lines were skipped leniently and why.
 - `CLAUDE_CONFIG_DIR` — override the Claude Code data root (default `~/.claude`).
 
 Sample output (from the test fixtures):
@@ -102,8 +102,8 @@ sub-agent share: 1,300 tokens across 1 request(s) ($0.0087) — attributed to pa
 ## Context: what's filling your window?
 
 ```
-tokscope context             # plain-table context-window breakdown
-tokscope context --json      # machine-readable
+skiagram context             # plain-table context-window breakdown
+skiagram context --json      # machine-readable
 ```
 
 Two kinds of number, kept strictly apart:
@@ -134,14 +134,14 @@ many skills were listed, and how many times the context filled up and got compac
 
 ## Privacy
 
-Session files contain your prompts and source code. tokscope opens them **read-only**,
+Session files contain your prompts and source code. skiagram opens them **read-only**,
 processes everything in-memory on your machine, and has **no network code in the default
 build**. No telemetry, ever. Test fixtures in this repo are fully synthetic.
 
 ## Contributing — adding an agent
 
 Each agent is one implementation of the `Adapter` trait in
-`crates/tokscope-core/src/adapters/`:
+`crates/skiagram-core/src/adapters/`:
 
 ```rust
 pub trait Adapter {
@@ -163,8 +163,8 @@ pub trait Adapter {
 ```
 cargo build
 cargo test                        # unit + snapshot + integration
-cargo run -p tokscope -- summary
-cargo run -p tokscope -- tui
+cargo run -p skiagram -- summary
+cargo run -p skiagram -- tui
 ```
 
 See `CLAUDE.md` for the architecture, data-format notes, and the correctness rules every

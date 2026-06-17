@@ -1,0 +1,201 @@
+---
+source: crates/skiagram-core/tests/claude_code_snapshot.rs
+expression: session
+---
+{
+  "id": "3e9d2c41-7b5a-4f2e-9c1d-2f6b8a1c0e11",
+  "agent": "claude-code",
+  "project": "-home-dev-acme-app",
+  "model": "claude-sonnet-4-5-20250929",
+  "parent_session": null,
+  "started_at": "2026-06-01T10:00:00Z",
+  "ended_at": "2026-06-01T10:04:00Z",
+  "events": [
+    {
+      "kind": "User",
+      "ts": "2026-06-01T10:00:00Z",
+      "request_id": null,
+      "model": null,
+      "usage": null,
+      "sidechain": false,
+      "content_summary": "Add a /health endpoint to the API please. (synthetic fixture)",
+      "content_chars": 61,
+      "has_thinking": false
+    },
+    {
+      "kind": "Assistant",
+      "ts": "2026-06-01T10:00:05Z",
+      "request_id": "req_fixture_001",
+      "model": "claude-sonnet-4-5-20250929",
+      "usage": {
+        "input": 1000,
+        "output": 50,
+        "cache_creation": 300,
+        "cache_creation_5m": 300,
+        "cache_creation_1h": 0,
+        "cache_read": 5000,
+        "thinking": null
+      },
+      "sidechain": false,
+      "content_summary": "I'll add the endpoint. Reading the router first.",
+      "content_chars": 48,
+      "has_thinking": false
+    },
+    {
+      "kind": "Assistant",
+      "ts": "2026-06-01T10:00:06Z",
+      "request_id": "req_fixture_001",
+      "model": "claude-sonnet-4-5-20250929",
+      "usage": {
+        "input": 1000,
+        "output": 120,
+        "cache_creation": 300,
+        "cache_creation_5m": 300,
+        "cache_creation_1h": 0,
+        "cache_read": 5000,
+        "thinking": null
+      },
+      "tool_calls": [
+        {
+          "id": "toolu_fix_01",
+          "name": "Read",
+          "input_bytes": 48,
+          "server": null
+        }
+      ],
+      "sidechain": false,
+      "content_summary": null,
+      "content_chars": 48,
+      "has_thinking": false
+    },
+    {
+      "kind": "Assistant",
+      "ts": "2026-06-01T10:00:07Z",
+      "request_id": "req_fixture_001",
+      "model": "claude-sonnet-4-5-20250929",
+      "usage": {
+        "input": 1000,
+        "output": 200,
+        "cache_creation": 300,
+        "cache_creation_5m": 300,
+        "cache_creation_1h": 0,
+        "cache_read": 5000,
+        "thinking": null
+      },
+      "tool_calls": [
+        {
+          "id": "toolu_fix_02",
+          "name": "mcp__github__search_issues",
+          "input_bytes": 27,
+          "server": "github"
+        }
+      ],
+      "sidechain": false,
+      "content_summary": null,
+      "content_chars": 27,
+      "has_thinking": false
+    },
+    {
+      "kind": "ToolResult",
+      "ts": "2026-06-01T10:00:08Z",
+      "request_id": null,
+      "model": null,
+      "usage": null,
+      "sidechain": false,
+      "content_summary": null,
+      "content_chars": 109,
+      "has_thinking": false,
+      "tool_use_id": "toolu_fix_01"
+    },
+    {
+      "kind": "Assistant",
+      "ts": "2026-06-01T10:01:00Z",
+      "request_id": "req_fixture_002",
+      "model": "claude-sonnet-4-5-20250929",
+      "usage": {
+        "input": 1200,
+        "output": 80,
+        "cache_creation": 0,
+        "cache_creation_5m": 0,
+        "cache_creation_1h": 0,
+        "cache_read": 6000,
+        "thinking": null
+      },
+      "tool_calls": [
+        {
+          "id": "toolu_fix_03",
+          "name": "Agent",
+          "input_bytes": 127,
+          "server": null
+        }
+      ],
+      "sidechain": false,
+      "content_summary": null,
+      "content_chars": 127,
+      "has_thinking": false
+    },
+    {
+      "kind": "SubAgentSpawn",
+      "ts": "2026-06-01T10:01:00Z",
+      "request_id": null,
+      "model": null,
+      "usage": null,
+      "sidechain": false,
+      "content_summary": "Audit error handling",
+      "content_chars": 0,
+      "has_thinking": false
+    },
+    {
+      "kind": "ToolResult",
+      "ts": "2026-06-01T10:02:00Z",
+      "request_id": null,
+      "model": null,
+      "usage": null,
+      "sidechain": false,
+      "content_summary": null,
+      "content_chars": 119,
+      "has_thinking": false,
+      "tool_use_id": "toolu_fix_03"
+    },
+    {
+      "kind": "Assistant",
+      "ts": "2026-06-01T10:03:00Z",
+      "request_id": "req_fixture_004",
+      "model": "claude-sonnet-4-5-20250929",
+      "usage": {
+        "input": 1500,
+        "output": 60,
+        "cache_creation": null,
+        "cache_creation_5m": null,
+        "cache_creation_1h": null,
+        "cache_read": null,
+        "thinking": null
+      },
+      "sidechain": false,
+      "content_summary": "Added /health with tests.",
+      "content_chars": 1683,
+      "thinking_chars": 1658,
+      "has_thinking": true
+    },
+    {
+      "kind": "Compaction",
+      "ts": "2026-06-01T10:04:00Z",
+      "request_id": null,
+      "model": null,
+      "usage": null,
+      "sidechain": false,
+      "content_summary": "Conversation compacted (synthetic)",
+      "content_chars": 34,
+      "has_thinking": false
+    }
+  ],
+  "sub_agents": [
+    {
+      "tool_call_id": "toolu_fix_03",
+      "agent_type": "general-purpose",
+      "description": "Audit error handling",
+      "ts": "2026-06-01T10:01:00Z"
+    }
+  ],
+  "skipped_lines": 2
+}

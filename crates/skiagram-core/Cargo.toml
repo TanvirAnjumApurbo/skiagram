@@ -1,0 +1,20 @@
+[package]
+name = "skiagram-core"
+description = "Domain model, agent adapters, and token-accounting analysis for skiagram (no UI, no network)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+walkdir.workspace = true
+jiff.workspace = true
+tracing.workspace = true
+directories.workspace = true
+
+[dev-dependencies]
+insta.workspace = true

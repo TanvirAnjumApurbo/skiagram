@@ -1513,6 +1513,45 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 
 [[package]]
+name = "skiagram"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "assert_cmd",
+ "clap",
+ "comfy-table",
+ "directories",
+ "inferno",
+ "jiff",
+ "notify",
+ "owo-colors",
+ "predicates",
+ "ratatui",
+ "serde",
+ "serde_json",
+ "skiagram-core",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+ "ureq",
+]
+
+[[package]]
+name = "skiagram-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "directories",
+ "insta",
+ "jiff",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tracing",
+ "walkdir",
+]
+
+[[package]]
 name = "smallvec"
 version = "1.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1667,45 +1706,6 @@ checksum = "c8323304221c2a851516f22236c5722a72eaa19749016521d6dff0824447d96d"
 dependencies = [
  "displaydoc",
  "zerovec",
-]
-
-[[package]]
-name = "tokscope"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "assert_cmd",
- "clap",
- "comfy-table",
- "directories",
- "inferno",
- "jiff",
- "notify",
- "owo-colors",
- "predicates",
- "ratatui",
- "serde",
- "serde_json",
- "tokscope-core",
- "toml",
- "tracing",
- "tracing-subscriber",
- "ureq",
-]
-
-[[package]]
-name = "tokscope-core"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "directories",
- "insta",
- "jiff",
- "serde",
- "serde_json",
- "thiserror",
- "tracing",
- "walkdir",
 ]
 
 [[package]]
