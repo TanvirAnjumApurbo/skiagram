@@ -1,6 +1,6 @@
 # tokscope
 
-> **Status: MVP** · name is a placeholder (will be renamed before publishing)
+> **Status: v0.4 (feature-complete)** · name is a placeholder (will be renamed before publishing)
 
 A local-first, single-binary **CLI + TUI that profiles where your AI coding agent's tokens
 actually went** — and why your context window is full. Think *flamegraph for agent token
@@ -33,8 +33,8 @@ are usually wrong, and because nobody tells you where the context window went:
    instead of inventing a phantom undercount. Unknown fields are reported as *unknown* —
    never as zero, and unknown models are never guessed a price.
 
-2. **Context-bloat attribution** *(v0.2, in progress)*. Which MCP server, tool-definition
-   set, or plugin is eating your window before you type a word.
+2. **Context-bloat attribution.** Which MCP server, tool-definition set, or plugin is eating
+   your window before you type a word (`tokscope context`).
 
 3. **Sub-agent attribution.** Spawned sub-agents (`Task`/`Agent` tool) write their own
    transcripts; most tools drop or misattribute that spend. tokscope folds it back into the
