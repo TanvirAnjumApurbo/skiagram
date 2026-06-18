@@ -7,6 +7,12 @@
 /.cargo/
 /.rustup/
 
+# Secrets — local publishing tokens (crates.io / npm / winget PAT). NEVER commit.
+# A committed `.env.example` (no secrets) would still be allowed by these rules.
+.env
+.env.local
+.env.*.local
+
 # insta pending snapshots (accepted snapshots ARE committed)
 *.pending-snap
 
