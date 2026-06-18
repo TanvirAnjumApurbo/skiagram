@@ -67,14 +67,7 @@ pub(crate) fn wordmark_rows() -> Vec<String> {
         .map(|r| {
             GLYPHS
                 .iter()
-                .map(|g| {
-                    let mut s = String::with_capacity(g[r].len() * 2);
-                    for c in g[r].chars() {
-                        s.push(c);
-                        s.push(c);
-                    }
-                    s
-                })
+                .map(|g| g[r])
                 .collect::<Vec<_>>()
                 .join(" ")
                 .replace('X', PIXEL)
@@ -82,7 +75,7 @@ pub(crate) fn wordmark_rows() -> Vec<String> {
         .collect()
 }
 
-/// Width of the wordmark in columns (characters, not bytes — `█` is 3 bytes).
+/// Width of the wordmark in columns (characters, not bytes — `⣿` is 3 bytes).
 pub(crate) fn wordmark_width() -> usize {
     wordmark_rows().first().map_or(0, |r| r.chars().count())
 }
@@ -228,9 +221,8 @@ mod tests {
             "every row is the same width"
         );
         assert_eq!(w, wordmark_width());
-        // Each cell is doubled in width:
-        // s12 k12 i4 a12 g12 r10 a12 m16 = 90 cells + 7 single-column gaps.
-        assert_eq!(w, 90 + 7);
+        // s6 k6 i2 a6 g6 r5 a6 m8 = 45 cells + 7 single-column gaps.
+        assert_eq!(w, 45 + 7);
     }
 
     #[test]
