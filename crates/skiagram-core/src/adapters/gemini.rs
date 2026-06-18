@@ -304,7 +304,7 @@ fn apply_gemini(
 ) {
     let usage = raw.tokens.as_ref().map(map_tokens);
     let content = raw.content.as_str().unwrap_or_default();
-    let content_chars = content.chars().count() as u64;
+    let visible_chars = content.chars().count() as u64;
     let thinking_chars = raw
         .thoughts
         .iter()
@@ -319,6 +319,15 @@ fn apply_gemini(
         .flatten()
         .map(RawToolCall::to_tool_call)
         .collect();
+    // `content_chars` follows the model contract (visible text + thinking +
+    // tool-call JSON, with `thinking_chars` a SUBSET), exactly as the Claude Code /
+    // Copilot adapters build it — so `analysis::context` can recover the visible-text
+    // share by `content_chars − thinking_chars − tool-call bytes`. Counting only the
+    // visible answer here (as a prior version did) made that subtraction underflow to
+    // 0 whenever thoughts/tool JSON outweighed the answer, dropping Gemini assistant
+    // text from the context breakdown entirely.
+    let content_chars =
+        visible_chars + thinking_chars + tool_calls.iter().map(|c| c.input_bytes).sum::<u64>();
 
     let key = raw.id.clone().unwrap_or_default();
     if let Some(&idx) = gemini_idx.get(&key) {
@@ -329,7 +338,6 @@ fn apply_gemini(
             (Some(a), Some(b)) => Some(a.merge_max(b)),
             (a, b) => a.or(b),
         };
-        ev.content_chars = content_chars;
         ev.thinking_chars = thinking_chars;
         ev.has_thinking |= has_thinking;
         if let Some(s) = snippet(content) {
@@ -338,6 +346,12 @@ fn apply_gemini(
         if !tool_calls.is_empty() {
             ev.tool_calls = tool_calls;
         }
+        // Recompute against the FINAL tool set — when this line re-sent no tool calls
+        // the earlier set is kept, so basing the byte share on `ev.tool_calls` keeps
+        // `content_chars` consistent with the `tool_calls` that downstream subtracts.
+        ev.content_chars = visible_chars
+            + thinking_chars
+            + ev.tool_calls.iter().map(|c| c.input_bytes).sum::<u64>();
         return;
     }
 
@@ -626,7 +640,17 @@ mod tests {
         assert_eq!(assistants.len(), 1, "two lines, one request");
         let a = assistants[0];
         assert_eq!(a.usage.unwrap().known_total(), 1130);
-        assert_eq!(a.content_chars, 4, "last-wins content \"done\"");
+        // content_chars follows the model contract: visible "done" (4) + thoughts
+        // "Plan"+"do it" (9) + tool-call JSON {"sql":"select 1"} (18) = 31, so
+        // analysis::context recovers the 4 visible chars by subtraction.
+        assert_eq!(
+            a.thinking_chars, 9,
+            "thoughts are a subset of content_chars"
+        );
+        assert_eq!(
+            a.content_chars, 31,
+            "visible(4) + thinking(9) + tool JSON(18)"
+        );
         assert_eq!(a.tool_calls.len(), 1, "tool call from the later line");
         assert_eq!(a.tool_calls[0].server.as_deref(), Some("acme-db"));
         assert_eq!(s.model.as_deref(), Some("gemini-3-flash-preview"));

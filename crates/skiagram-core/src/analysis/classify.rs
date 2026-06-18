@@ -23,7 +23,7 @@ use serde::Serialize;
 
 use crate::analysis::aggregate::{Filter, Rollup};
 use crate::analysis::dedup::{dedup_session, UsageRecord};
-use crate::model::{EventKind, Session};
+use crate::model::{Event, EventKind, Session};
 use crate::pricing::PricingTable;
 
 /// What the user was doing in a session, inferred from prompt text + tool mix.
@@ -168,10 +168,13 @@ struct ToolMix {
 }
 
 impl ToolMix {
-    /// Tally tool-call names across every event of a session.
-    fn from_session(session: &Session) -> ToolMix {
+    /// Tally tool-call names across a session's in-window events.
+    fn from_session(session: &Session, since: Option<Date>) -> ToolMix {
         let mut mix = ToolMix::default();
         for event in &session.events {
+            if !in_window(since, event) {
+                continue;
+            }
             for call in &event.tool_calls {
                 match call.name.as_str() {
                     "Edit" | "MultiEdit" => mix.edit += 1,
@@ -331,7 +334,7 @@ pub fn classify(
 
     for (id, acc) in groups {
         let (task_type, confidence, signals) = match &acc.representative {
-            Some(rep) => classify_session(rep),
+            Some(rep) => classify_session(rep, filter.since),
             // A group can only exist with >0 requests, which require events, so a
             // representative is always present; classify Unknown if it somehow is not.
             None => (TaskType::Unknown, 0.0, Vec::new()),
@@ -448,9 +451,9 @@ fn merge_rollup(into: &mut Rollup, from: &Rollup) {
 /// = many Edit with ~no Write; exploration = Read/Grep/Glob with no Edit/Write).
 /// The argmax type wins; `confidence = winning / Σ scores` clamped to `[0,1]`.
 /// No signal at all → `Unknown`, confidence `0.0`, empty signals.
-fn classify_session(session: &Session) -> (TaskType, f64, Vec<String>) {
-    let prompts = lowercased_prompts(session);
-    let mix = ToolMix::from_session(session);
+fn classify_session(session: &Session, since: Option<Date>) -> (TaskType, f64, Vec<String>) {
+    let prompts = lowercased_prompts(session, since);
+    let mix = ToolMix::from_session(session, since);
 
     // Score every scorable type, remembering which keywords fired for the winner.
     let mut scores: Vec<(TaskType, f64, Vec<&'static str>)> = Vec::with_capacity(7);
@@ -584,15 +587,29 @@ fn tool_mix_note(mix: &ToolMix) -> Option<String> {
     }
 }
 
-/// Lowercased visible prompt text from every `User` event's `content_summary`.
-fn lowercased_prompts(session: &Session) -> Vec<String> {
+/// Lowercased visible prompt text from every in-window `User` event's
+/// `content_summary`.
+fn lowercased_prompts(session: &Session, since: Option<Date>) -> Vec<String> {
     session
         .events
         .iter()
-        .filter(|e| e.kind == EventKind::User)
+        .filter(|e| e.kind == EventKind::User && in_window(since, e))
         .filter_map(|e| e.content_summary.as_deref())
         .map(|s| s.to_ascii_lowercase())
         .collect()
+}
+
+/// Window predicate matching the spend passes ([`super::dedup`] /
+/// [`super::aggregate`]): with `since` set, an event counts only if dated on/after
+/// it; undated events drop. Applied to the classification signals too, so a
+/// windowed run classifies a session from the same events whose spend it reports —
+/// not from prompts/tools that happened outside the window.
+fn in_window(since: Option<Date>, event: &Event) -> bool {
+    match (since, event.ts) {
+        (None, _) => true,
+        (Some(since), Some(ts)) => super::utc_date(ts) >= since,
+        (Some(_), None) => false,
+    }
 }
 
 #[cfg(test)]
@@ -973,6 +990,43 @@ mod tests {
         assert_eq!(report.sessions.len(), 1, "old dropped (no in-window spend)");
         assert_eq!(report.sessions[0].id, "new");
         assert_eq!(report.total_tokens, 200 + 10);
+    }
+
+    /// `--since` scopes the CLASSIFICATION signals, not just the spend: a session
+    /// that debugged before the window but only explored within it is classified
+    /// Exploration, and the out-of-window "fix" prompt is not a signal.
+    #[test]
+    fn since_scopes_classification_signals_not_just_spend() {
+        let s = session(
+            "spanning",
+            None,
+            vec![
+                // Out of window: a debugging prompt + a fix-loop (Bash/Edit) turn.
+                user("2026-06-01T10:00:00Z", "fix the crash"),
+                tools_turn("dbg", &["Edit", "Bash", "Bash", "Bash"]),
+                // In window: an exploration prompt + read-dominant mix (the only
+                // in-window spend, so the group survives).
+                user("2026-06-03T10:00:00Z", "review and understand the module"),
+                turn(
+                    "exp",
+                    "2026-06-03T10:00:00Z",
+                    200,
+                    &["Read", "Grep", "Glob"],
+                ),
+            ],
+        );
+        let filter = Filter {
+            since: Some("2026-06-03".parse().unwrap()),
+        };
+        let report = classify(&[s], &filter, "claude-code", &PricingTable::embedded());
+        let c = class_of(&report, "spanning");
+        // Without windowing the signals, the heavier out-of-window debugging
+        // evidence would win; scoped to the window it is Exploration.
+        assert_eq!(c.task_type, TaskType::Exploration);
+        assert!(
+            !c.signals.iter().any(|sig| sig.contains("\"fix\"")),
+            "out-of-window debugging prompt must not be a signal"
+        );
     }
 
     // ---- pricing / shares ------------------------------------------------

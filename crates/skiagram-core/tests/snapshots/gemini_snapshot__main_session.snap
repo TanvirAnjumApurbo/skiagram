@@ -46,7 +46,7 @@ expression: session
       ],
       "sidechain": false,
       "content_summary": null,
-      "content_chars": 0,
+      "content_chars": 55,
       "thinking_chars": 37,
       "has_thinking": true
     },
