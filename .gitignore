@@ -16,6 +16,11 @@
 # insta pending snapshots (accepted snapshots ARE committed)
 *.pending-snap
 
+# Internal-only working docs — kept locally for project context, never published.
+/CLAUDE.md
+/PUBLISHING.md
+/STATUS.md
+
 # OS noise
 .DS_Store
 Thumbs.db
