@@ -123,6 +123,25 @@ fn since_filters_by_utc_date() {
 }
 
 #[test]
+fn bare_invocation_prints_welcome_not_a_report() {
+    // Redirect the first-run marker to a temp dir so the test never touches the
+    // real per-OS data dir. Bare invocation needs no agent data, so this succeeds
+    // even with nothing installed — and must show the slogan + command list.
+    let tmp = std::env::temp_dir().join(format!("skiagram-welcome-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmp);
+    Command::cargo_bin("skiagram")
+        .expect("binary builds")
+        .env("SKIAGRAM_STATE_DIR", &tmp)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "The flamegraph for your AI agent's token spend",
+        ))
+        .stdout(predicate::str::contains("skiagram summary"));
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+#[test]
 fn unknown_agent_fails_with_known_ids() {
     skiagram()
         .args(["summary", "--agent", "nope"])

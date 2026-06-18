@@ -68,6 +68,50 @@ impl Config {
     }
 }
 
+// ---- first-run greeting marker ----
+//
+// We greet a brand-new user once (banner + slogan) on their first interactive run,
+// then drop a marker so it never repeats. Local-only and best-effort: if we can't
+// determine or write the path we simply skip — the greeting is never worth an error
+// (CLAUDE.md §12). `$SKIAGRAM_STATE_DIR` overrides the directory (also the test hook).
+
+const MARKER_NAME: &str = ".welcomed";
+
+/// Directory holding the first-run marker: `$SKIAGRAM_STATE_DIR`, else the per-OS
+/// data dir. `None` when neither can be determined.
+fn state_dir() -> Option<PathBuf> {
+    if let Some(d) = std::env::var_os("SKIAGRAM_STATE_DIR") {
+        if !d.is_empty() {
+            return Some(PathBuf::from(d));
+        }
+    }
+    directories::ProjectDirs::from("", "", "skiagram").map(|d| d.data_dir().to_path_buf())
+}
+
+fn pending_in(dir: &Path) -> bool {
+    !dir.join(MARKER_NAME).exists()
+}
+
+fn mark_in(dir: &Path) {
+    let _ = std::fs::create_dir_all(dir);
+    let _ = std::fs::write(
+        dir.join(MARKER_NAME),
+        b"skiagram first-run greeting shown\n",
+    );
+}
+
+/// True when the first-run greeting has not yet been shown on this machine.
+pub fn first_run_pending() -> bool {
+    state_dir().is_some_and(|d| pending_in(&d))
+}
+
+/// Record that the first-run greeting has been shown (idempotent, best-effort).
+pub fn mark_first_run_complete() {
+    if let Some(d) = state_dir() {
+        mark_in(&d);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -112,5 +156,20 @@ mod tests {
             Some("cursor")
         );
         let _ = std::fs::remove_file(&p);
+    }
+
+    #[test]
+    fn first_run_marker_roundtrips() {
+        // Inner helpers take an explicit dir (no env), so this can't race other tests.
+        let dir = std::env::temp_dir().join(format!("skiagram-state-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        assert!(pending_in(&dir), "no marker yet => first run pending");
+        mark_in(&dir);
+        assert!(!pending_in(&dir), "after marking => not pending");
+        mark_in(&dir); // idempotent
+        assert!(!pending_in(&dir));
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

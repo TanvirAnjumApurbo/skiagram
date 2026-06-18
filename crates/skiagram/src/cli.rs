@@ -1,5 +1,7 @@
 //! Command-line surface (`clap` derive).
 
+use std::io::IsTerminal;
+
 use anyhow::Context;
 use clap::{Parser, Subcommand};
 use skiagram_core::analysis::aggregate::{aggregate, Filter};
@@ -109,6 +111,24 @@ fn parse_date(s: &str) -> Result<jiff::civil::Date, String> {
 
 pub fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
+
+    // Bare `skiagram` (no subcommand): a welcome screen, not a report. It needs no
+    // agent data, so handle it before detection (which fails when nothing is
+    // installed). It also serves as the first-run greeting, so record that.
+    if cli.command.is_none() {
+        crate::render::banner::print_welcome();
+        crate::config::mark_first_run_complete();
+        return Ok(());
+    }
+
+    // First interactive run of an explicit command: a one-time greeting on stderr
+    // (stdout stays clean for the table/JSON that follows). TTY-gated so it never
+    // fires in pipes or tests.
+    if std::io::stderr().is_terminal() && crate::config::first_run_pending() {
+        crate::render::banner::print_first_run_greeting();
+        crate::config::mark_first_run_complete();
+    }
+
     let config = crate::config::Config::load();
 
     // Agent precedence: `--agent` > config `default_agent` > auto-detect.

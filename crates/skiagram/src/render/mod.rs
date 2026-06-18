@@ -1,6 +1,7 @@
 //! Output rendering: human tables, machine JSON, (later) flamegraph SVG.
 
 pub mod anomalies;
+pub mod banner;
 pub mod classify;
 pub mod flame;
 pub mod json;
