@@ -9,6 +9,12 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 rust-version = "1.85"
+repository = "https://github.com/TanvirAnjumApurbo/skiagram"
+homepage = "https://github.com/TanvirAnjumApurbo/skiagram"
+documentation = "https://docs.rs/skiagram-core"
+authors = ["Tanvir Anjum Apurbo"]
+keywords = ["tokens", "llm", "cli", "tui", "claude"]
+categories = ["command-line-utilities", "development-tools"]
 
 [workspace.dependencies]
 skiagram-core = { path = "crates/skiagram-core", version = "0.1.0" }
@@ -41,6 +47,11 @@ inferno = { version = "0.12", default-features = false }
 insta = { version = "1.41", features = ["json"] }
 assert_cmd = "2.0"
 predicates = "3.1"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
 
 # Planned (CLAUDE.md §4) — added when the feature lands, to keep the build lean:
 #   rusqlite (bundled)  -> Cursor adapter (v0.4)

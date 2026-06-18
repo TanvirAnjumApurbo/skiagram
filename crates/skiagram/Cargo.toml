@@ -5,6 +5,13 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "../../README.md"
 
 [dependencies]
 skiagram-core.workspace = true
@@ -33,3 +40,6 @@ network = ["dep:ureq"]
 [dev-dependencies]
 assert_cmd.workspace = true
 predicates.workspace = true
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/{ name }-{ target }.{ archive-format }"
