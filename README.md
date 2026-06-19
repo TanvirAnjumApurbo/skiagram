@@ -130,7 +130,7 @@ brew install TanvirAnjumApurbo/tap/skiagram
 **macOS and Linux (shell installer):**
 
 ```bash
-curl -LsSf https://github.com/TanvirAnjumApurbo/skiagram/releases/latest/download/install.sh | sh
+curl -LsSf https://github.com/TanvirAnjumApurbo/skiagram/releases/latest/download/skiagram-installer.sh | sh
 ```
 
 **Windows (Scoop):**
@@ -148,7 +148,7 @@ winget install TanvirAnjumApurbo.skiagram
 **Windows (PowerShell installer):**
 
 ```powershell
-irm https://github.com/TanvirAnjumApurbo/skiagram/releases/latest/download/install.ps1 | iex
+irm https://github.com/TanvirAnjumApurbo/skiagram/releases/latest/download/skiagram-installer.ps1 | iex
 ```
 
 **npm** (install globally, or run on demand with `npx`):
