@@ -1,0 +1,20 @@
+# Submit a winget manifest PR to microsoft/winget-pkgs when a real (non-prerelease)
+# release is published. Uses our fork (TanvirAnjumApurbo/winget-pkgs) and WINGET_TOKEN
+# (a PAT with public_repo scope). winget consumes the portable .zip, so the installer
+# regex targets the windows-msvc archive rather than the default exe/msi/msix.
+name: winget
+
+on:
+  release:
+    types: [released] # fires only for published, non-prerelease releases (not rc/pre)
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: TanvirAnjumApurbo.skiagram
+          installers-regex: '-pc-windows-msvc\.zip$'
+          fork-user: TanvirAnjumApurbo
+          token: ${{ secrets.WINGET_TOKEN }}
