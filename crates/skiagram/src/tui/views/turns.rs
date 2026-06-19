@@ -89,6 +89,18 @@ pub fn draw(frame: &mut Frame, detail: &SessionDetail, state: &mut TableState) {
             body_area,
         );
     } else {
+        // Size the Model column to the widest model id actually present so the
+        // full name shows — ids range from `gpt-5.5` to dated
+        // `claude-sonnet-4-5-20250929` — clamped so a stray long id can't blow
+        // out the row (floor keeps the "Model" header padded even for short ids).
+        let model_w = detail
+            .turns
+            .iter()
+            .map(|t| t.model.as_deref().unwrap_or("?").chars().count())
+            .max()
+            .unwrap_or(0)
+            .clamp(8, 30) as u16;
+
         let rows = detail.turns.iter().map(|t| {
             let detail_text = t.summary.clone().unwrap_or_else(|| t.tools.join(","));
             Row::new(vec![
@@ -106,8 +118,8 @@ pub fn draw(frame: &mut Frame, detail: &SessionDetail, state: &mut TableState) {
         let table = Table::new(
             rows,
             [
-                Constraint::Length(8),
-                Constraint::Length(14),
+                Constraint::Length(10),
+                Constraint::Length(model_w),
                 Constraint::Length(9),
                 Constraint::Length(9),
                 Constraint::Length(9),
