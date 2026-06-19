@@ -6,7 +6,14 @@ name: winget
 
 on:
   release:
-    types: [released] # fires only for published, non-prerelease releases (not rc/pre)
+    types: [released] # auto-fires for non-prerelease releases — BUT note: a release created by
+                      # the Actions GITHUB_TOKEN does not trigger this, so use the manual dispatch below.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to submit to winget (e.g. v0.1.0)"
+        required: true
+        default: v0.1.0
 
 jobs:
   publish:
@@ -17,4 +24,5 @@ jobs:
           identifier: TanvirAnjumApurbo.skiagram
           installers-regex: '-pc-windows-msvc\.zip$'
           fork-user: TanvirAnjumApurbo
+          release-tag: ${{ github.event.release.tag_name || inputs.tag }}
           token: ${{ secrets.WINGET_TOKEN }}
