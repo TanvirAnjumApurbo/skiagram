@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img src="readme_banner.png" alt="skiagram: the flamegraph for your AI agent's token spend" width="760">
+<img src="readme_banner.png" alt="skiagram: the flamegraph for your AI agent's token spend" width="100%">
 
 <h3>🔥 The flamegraph for your AI agent's token spend 🔥</h3>
 

@@ -16,6 +16,10 @@
 # insta pending snapshots (accepted snapshots ARE committed)
 *.pending-snap
 
+# Generated flamegraph SVGs (`skiagram flame --out ...`) — output artifacts, not committed.
+/skiagram-flame.svg
+/spend.svg
+
 # Internal-only working docs — kept locally for project context, never published.
 /CLAUDE.md
 /PUBLISHING.md
