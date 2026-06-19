@@ -1,10 +1,12 @@
 //! Folded-stack data for a token-spend flamegraph (CLAUDE.md §2.4, roadmap v0.3).
 //!
 //! Answers "*where did the tokens (or dollars) go?*" as a hierarchy the binary
-//! can hand straight to inferno: each leaf is one `project → session → model →
-//! token-type` path with an integer weight. This is the `-core` half only — it
-//! produces the weighted "folded stacks"; the binary owns the SVG rendering and
-//! has the inferno dependency (this crate must never gain one).
+//! can hand straight to inferno: each leaf is one path with an integer weight.
+//! The path's levels are chosen by [`Dim`], defaulting to `project → session →
+//! model → token-type` ([`Dim::DEFAULT`]) but reorderable/droppable via the
+//! binary's `--group-by`. This is the `-core` half only — it produces the
+//! weighted "folded stacks"; the binary owns the SVG rendering and has the
+//! inferno dependency (this crate must never gain one).
 //!
 //! Like every accounting pass here, weights are computed over DEDUPLICATED
 //! requests, never raw JSONL lines — request-level dedup is THE accounting step
@@ -15,7 +17,7 @@
 //! The `session` frame uses the request's parent-session id when present, which
 //! FOLDS sub-agent (sidechain) transcripts into their parent session's slice —
 //! spawned work is attributed, never dropped (§8.3), matching `aggregate` and
-//! `drilldown`.
+//! `drilldown` — then shortens it to a readable prefix ([`short_session`]).
 //!
 //! Two metrics (see [`FlameMetric`]):
 //!
@@ -52,6 +54,38 @@ pub enum FlameMetric {
     /// weight. Priced from the embedded snapshot; unpriced requests contribute
     /// nothing and are counted in `unpriced_requests` (§8.5/§8.7).
     Cost,
+}
+
+/// One level (frame "row") of the flamegraph hierarchy, outermost first. The
+/// default is `Project → Session → Model → Type`; the binary's `--group-by`
+/// lets a user reorder or drop levels — e.g. dropping [`Dim::Session`] (the
+/// opaque session-id row) gives a cleaner `project → model → token-type` view.
+///
+/// [`Dim::Type`] is the per-request token-type split (input / output /
+/// cache-read / cache-write / thinking). When it is omitted, those five are
+/// SUMMED into the innermost structural frame instead of broken out — totals
+/// are unchanged either way (regrouping never drops spend).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum Dim {
+    Project,
+    Session,
+    Model,
+    Type,
+}
+
+impl Dim {
+    /// The default hierarchy: `Project → Session → Model → Type`.
+    pub const DEFAULT: [Dim; 4] = [Dim::Project, Dim::Session, Dim::Model, Dim::Type];
+}
+
+/// Human-readable session-frame label: the first 8 characters of the id — for a
+/// UUID, the first hyphen-delimited group (e.g. `3e9d2c41`). Full session UUIDs
+/// are unreadable in narrow frames and add nothing at a glance; 8 hex chars tell
+/// sessions apart. A prefix collision would only merge two slices *visually* —
+/// every leaf weight is still counted, so totals are unaffected (and a clash is
+/// astronomically unlikely for realistic session counts anyway).
+fn short_session(id: &str) -> String {
+    id.chars().take(8).collect()
 }
 
 /// One folded-stack line: a base→leaf frame path and its integer weight.
@@ -195,20 +229,24 @@ fn leaves(usage: &Usage, pricing: Option<&pricing::ModelPricing>) -> [Leaf; 5] {
     ]
 }
 
-/// Fold sessions into flamegraph data. See module docs for the hierarchy & rules.
+/// Fold sessions into flamegraph data. See module docs for the rules.
 ///
 /// Each session is reduced to deduplicated requests via [`dedup_session`] (THE
 /// accounting step, §8.1 — `filter.since` filtering happens inside it). Every
-/// request contributes up to five leaves on the path
-/// `project → session → model → token-type`; the `session` frame folds sub-agent
-/// transcripts into their parent (§8.3). Under the Cost metric, a request whose
-/// model is unpriced is skipped entirely and counted in `unpriced_requests` —
-/// prices are never guessed (§8.7).
+/// request contributes up to five leaves; `dims` chooses the frame path each
+/// leaf lands on (outermost first), defaulting to
+/// `project → session → model → token-type` ([`Dim::DEFAULT`]). The `Session`
+/// frame folds sub-agent transcripts into their parent (§8.3) and is shortened
+/// to a readable prefix ([`short_session`]); omitting [`Dim::Type`] sums the
+/// token-types into the innermost structural frame. Under the Cost metric, a
+/// request whose model is unpriced is skipped entirely and counted in
+/// `unpriced_requests` — prices are never guessed (§8.7).
 pub fn fold(
     sessions: &[Session],
     filter: &Filter,
     agent: &str,
     metric: FlameMetric,
+    dims: &[Dim],
     pricing_table: &PricingTable,
 ) -> FlameData {
     // Accumulate weights per unique 4-frame path. A BTreeMap keeps the emitted
@@ -235,15 +273,15 @@ pub fn fold(
                 }
             };
 
-            // Frames base→leaf: project, session (parent folds in), model.
+            // Structural frame values for this request. `session` folds sub-agent
+            // transcripts into their parent (§8.3) and is shortened to a readable
+            // prefix; project/model fall back to explicit "unknown" labels.
             let project = rec
                 .project
                 .clone()
                 .unwrap_or_else(|| UNKNOWN_PROJECT.into());
-            let session_frame = rec
-                .parent_session
-                .clone()
-                .unwrap_or_else(|| rec.session_id.clone());
+            let session_label =
+                short_session(rec.parent_session.as_deref().unwrap_or(&rec.session_id));
             let model = rec.model.clone().unwrap_or_else(|| UNKNOWN_MODEL.into());
 
             for leaf in leaves(&rec.usage, pricing) {
@@ -255,12 +293,18 @@ pub fn fold(
                 if weight <= 0.0 {
                     continue;
                 }
-                let frames = vec![
-                    project.clone(),
-                    session_frame.clone(),
-                    model.clone(),
-                    leaf.label.to_string(),
-                ];
+                // Build the frame path from the selected dimensions, in order.
+                // Omitting `Type` makes every leaf of a request share one path,
+                // so the five token-types sum into the innermost structural frame.
+                let frames: Vec<String> = dims
+                    .iter()
+                    .map(|dim| match dim {
+                        Dim::Project => project.clone(),
+                        Dim::Session => session_label.clone(),
+                        Dim::Model => model.clone(),
+                        Dim::Type => leaf.label.to_string(),
+                    })
+                    .collect();
                 *paths.entry(frames).or_insert(0.0) += weight;
             }
         }
@@ -298,6 +342,10 @@ pub fn fold(
 mod tests {
     use super::*;
     use crate::model::{Event, EventKind, Usage};
+
+    /// The default `project → session → model → token-type` hierarchy, as the CLI
+    /// passes it when `--group-by` is omitted.
+    const DIMS: &[Dim] = &Dim::DEFAULT;
 
     /// Assistant event with one request id and the given full usage breakdown.
     /// Model is the priced `claude-sonnet-4-5` unless a test overrides it.
@@ -368,6 +416,7 @@ mod tests {
             &Filter::default(),
             "claude-code",
             FlameMetric::Tokens,
+            DIMS,
             &PricingTable::embedded(),
         );
 
@@ -401,6 +450,7 @@ mod tests {
             &Filter::default(),
             "claude-code",
             FlameMetric::Tokens,
+            DIMS,
             &PricingTable::embedded(),
         );
         let m = "claude-sonnet-4-5";
@@ -424,6 +474,7 @@ mod tests {
             &Filter::default(),
             "claude-code",
             FlameMetric::Tokens,
+            DIMS,
             &PricingTable::embedded(),
         );
         let m = "claude-sonnet-4-5";
@@ -449,6 +500,7 @@ mod tests {
             &Filter::default(),
             "claude-code",
             FlameMetric::Cost,
+            DIMS,
             &PricingTable::embedded(),
         );
 
@@ -486,6 +538,7 @@ mod tests {
             &Filter::default(),
             "claude-code",
             FlameMetric::Cost,
+            DIMS,
             &PricingTable::embedded(),
         );
         // 1000 thinking tokens * output rate 15.0 = 15_000 micro-USD.
@@ -508,6 +561,7 @@ mod tests {
             &Filter::default(),
             "claude-code",
             FlameMetric::Cost,
+            DIMS,
             &PricingTable::embedded(),
         );
         assert!(d.stacks.is_empty());
@@ -522,6 +576,7 @@ mod tests {
             &Filter::default(),
             "claude-code",
             FlameMetric::Cost,
+            DIMS,
             &PricingTable::embedded(),
         );
         assert_eq!(d.unpriced_requests, 1);
@@ -544,6 +599,7 @@ mod tests {
             &Filter::default(),
             "claude-code",
             FlameMetric::Tokens,
+            DIMS,
             &PricingTable::embedded(),
         );
         assert_eq!(d.unpriced_requests, 0);
@@ -569,6 +625,7 @@ mod tests {
             &filter,
             "claude-code",
             FlameMetric::Tokens,
+            DIMS,
             &PricingTable::embedded(),
         );
         assert_eq!(d.since, filter.since);
@@ -587,6 +644,7 @@ mod tests {
             &Filter::default(),
             "claude-code",
             FlameMetric::Tokens,
+            DIMS,
             &PricingTable::embedded(),
         );
         assert!(d.stacks.is_empty());
@@ -625,6 +683,7 @@ mod tests {
             &Filter::default(),
             "claude-code",
             FlameMetric::Tokens,
+            DIMS,
             &PricingTable::embedded(),
         );
 
@@ -634,5 +693,78 @@ mod tests {
         }
         // "alpha" sorts before "zeta" at the project frame.
         assert_eq!(d.stacks[0].frames[0], "alpha");
+    }
+
+    /// The session frame is shortened to a readable 8-char prefix; the full UUID
+    /// never appears as a frame, and the total is unchanged.
+    #[test]
+    fn session_frame_is_shortened_to_prefix() {
+        let id = "3e9d2c41-7b5a-4f2e-9c1d-2f6b8a1c0e11";
+        let s = session(id, None, vec![turn("r", usage(1_000, 0, 0, 0))]);
+        let d = fold(
+            &[s],
+            &Filter::default(),
+            "claude-code",
+            FlameMetric::Tokens,
+            DIMS,
+            &PricingTable::embedded(),
+        );
+        let m = "claude-sonnet-4-5";
+        assert_eq!(leaf_value(&d, "proj", "3e9d2c41", m, "input"), Some(1_000));
+        assert!(
+            !d.stacks.iter().any(|s| s.frames.iter().any(|f| f == id)),
+            "the full UUID must never appear as a frame"
+        );
+        assert_eq!(d.total_value, 1_000);
+    }
+
+    /// `--group-by project,model,type` drops the session level: every path is a
+    /// 3-frame `project;model;type`, no session prefix appears, and the grand
+    /// total is unchanged (regrouping never drops spend).
+    #[test]
+    fn dims_drop_session_level() {
+        let id = "3e9d2c41-7b5a-4f2e-9c1d-2f6b8a1c0e11";
+        let s = session(id, None, vec![turn("r", usage(1_000, 200, 0, 0))]);
+        let dims = &[Dim::Project, Dim::Model, Dim::Type];
+        let d = fold(
+            &[s],
+            &Filter::default(),
+            "claude-code",
+            FlameMetric::Tokens,
+            dims,
+            &PricingTable::embedded(),
+        );
+        assert!(d.stacks.iter().all(|s| s.frames.len() == 3));
+        assert!(
+            !d.stacks
+                .iter()
+                .any(|s| s.frames.iter().any(|f| f == "3e9d2c41")),
+            "session level dropped"
+        );
+        let m = "claude-sonnet-4-5";
+        let input = d.stacks.iter().find(|s| s.frames == ["proj", m, "input"]);
+        assert_eq!(input.map(|s| s.value), Some(1_000));
+        assert_eq!(d.total_value, 1_200);
+    }
+
+    /// Omitting `Type` sums the token-types into the innermost structural frame:
+    /// a single `project;model` stack whose weight is every type added together.
+    #[test]
+    fn omitting_type_sums_token_types() {
+        let s = session("s", None, vec![turn("r", usage(1_000, 200, 50, 0))]);
+        let dims = &[Dim::Project, Dim::Model];
+        let d = fold(
+            &[s],
+            &Filter::default(),
+            "claude-code",
+            FlameMetric::Tokens,
+            dims,
+            &PricingTable::embedded(),
+        );
+        let m = "claude-sonnet-4-5";
+        assert_eq!(d.stacks.len(), 1);
+        assert_eq!(d.stacks[0].frames, ["proj", m]);
+        assert_eq!(d.stacks[0].value, 1_250, "1000 + 200 + 50 summed");
+        assert_eq!(d.total_value, 1_250);
     }
 }

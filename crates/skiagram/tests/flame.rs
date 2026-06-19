@@ -22,6 +22,9 @@ use assert_cmd::Command;
 use predicates::prelude::*;
 
 const PARENT_SESSION_ID: &str = "3e9d2c41-7b5a-4f2e-9c1d-2f6b8a1c0e11";
+/// The session frame is shortened to a readable 8-char prefix (the first UUID
+/// group), so the graph shows this — never the full id.
+const PARENT_SESSION_SHORT: &str = "3e9d2c41";
 /// The sub-agent transcript's own session id (file stem). It must NEVER appear
 /// as a session frame — sub-agent spend folds into its parent (§8.3).
 const SUBAGENT_SESSION_ID: &str = "agent-fix0001";
@@ -98,13 +101,55 @@ fn fold_folds_subagent_into_parent_session() {
     let text = std::str::from_utf8(&output.stdout).expect("utf8");
 
     assert!(
-        text.contains(PARENT_SESSION_ID),
-        "parent session frame must be present: {text}"
+        text.contains(PARENT_SESSION_SHORT),
+        "parent session frame (shortened) must be present: {text}"
+    );
+    assert!(
+        !text.contains(PARENT_SESSION_ID),
+        "the full session UUID is shortened, never shown in full: {text}"
     );
     assert!(
         !text.contains(SUBAGENT_SESSION_ID),
         "sub-agent id must NOT appear as a session frame (it folds into the parent): {text}"
     );
+}
+
+/// `--group-by project,model,type` drops the opaque session level: the parent
+/// session prefix is gone, every path is a 3-frame `project;model;type`, and the
+/// grand total is unchanged (regrouping never drops spend, §8).
+#[test]
+fn group_by_drops_session_level() {
+    let output = skiagram()
+        .args([
+            "flame",
+            "--fold",
+            "--group-by",
+            "project,model,type",
+            "--agent",
+            "claude-code",
+        ])
+        .output()
+        .expect("runs");
+    assert!(output.status.success());
+    let text = std::str::from_utf8(&output.stdout).expect("utf8");
+
+    assert_eq!(
+        sum_folded_values(&output.stdout),
+        18_080,
+        "dropping a level regroups but never changes the total"
+    );
+    assert!(
+        !text.contains(PARENT_SESSION_SHORT),
+        "session level dropped, so its prefix must not appear: {text}"
+    );
+    for line in text.lines().filter(|l| !l.trim().is_empty()) {
+        let path = line.rsplit_once(' ').map(|(p, _)| p).unwrap_or(line);
+        assert_eq!(
+            path.matches(';').count(),
+            2,
+            "expected a 3-frame project;model;type path, got {line:?}"
+        );
+    }
 }
 
 /// `flame --out <file>` writes a real SVG that embeds the frame labels and the
@@ -133,6 +178,14 @@ fn writes_a_valid_svg_file() {
     );
     assert!(svg.contains("-home-dev-acme-app"), "frame label embedded");
     assert!(svg.contains("tokens"), "unit (count_name) embedded");
+    assert!(
+        svg.contains("id=\"legend\""),
+        "token-type color legend embedded"
+    );
+    assert!(
+        svg.contains("var nametype = 'Frame:'"),
+        "hover prefix is the domain-appropriate 'Frame:'"
+    );
 }
 
 /// Cost metric: the folded micro-USD weights sum to the fixture's total cost

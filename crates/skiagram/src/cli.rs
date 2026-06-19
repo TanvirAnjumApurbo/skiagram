@@ -68,7 +68,8 @@ pub enum Command {
         #[arg(long)]
         json: bool,
     },
-    /// Flamegraph SVG of token spend (project → session → model → token-type).
+    /// Flamegraph SVG of token spend. Default hierarchy: project → session →
+    /// model → token-type; reorder or drop levels with `--group-by`.
     Flame {
         /// Output SVG path.
         #[arg(long, default_value = "skiagram-flame.svg")]
@@ -76,6 +77,12 @@ pub enum Command {
         /// Frame width metric.
         #[arg(long, value_enum, default_value = "tokens")]
         metric: MetricArg,
+        /// Frame hierarchy, outermost first (comma-separated): any of
+        /// project,session,model,type. Drop `session` for a cleaner
+        /// project→model→type view; drop `type` to merge the token-types into one
+        /// box per group. [default: project,session,model,type]
+        #[arg(long, value_enum, value_delimiter = ',')]
+        group_by: Vec<DimArg>,
         /// Print the folded stacks to stdout instead of writing an SVG (for piping).
         #[arg(long)]
         fold: bool,
@@ -101,6 +108,28 @@ impl From<MetricArg> for skiagram_core::analysis::flame::FlameMetric {
         match m {
             MetricArg::Tokens => Self::Tokens,
             MetricArg::Cost => Self::Cost,
+        }
+    }
+}
+
+/// Flamegraph hierarchy level for `flame --group-by`. CLI-side mirror of
+/// [`skiagram_core::analysis::flame::Dim`] (the core crate has no clap
+/// dependency, so the `ValueEnum` lives here).
+#[derive(Clone, Copy, Debug, clap::ValueEnum)]
+pub(crate) enum DimArg {
+    Project,
+    Session,
+    Model,
+    Type,
+}
+
+impl From<DimArg> for skiagram_core::analysis::flame::Dim {
+    fn from(d: DimArg) -> Self {
+        match d {
+            DimArg::Project => Self::Project,
+            DimArg::Session => Self::Session,
+            DimArg::Model => Self::Model,
+            DimArg::Type => Self::Type,
         }
     }
 }
@@ -196,14 +225,26 @@ pub fn run() -> anyhow::Result<()> {
                 crate::render::classify::print(&report);
             }
         }
-        Command::Flame { out, metric, fold } => {
+        Command::Flame {
+            out,
+            metric,
+            group_by,
+            fold,
+        } => {
             let (sessions, _failed) = collect_sessions(adapter.as_ref())?;
             let filter = Filter { since: cli.since };
+            // Omitted `--group-by` -> the default project→session→model→type.
+            let dims: Vec<skiagram_core::analysis::flame::Dim> = if group_by.is_empty() {
+                skiagram_core::analysis::flame::Dim::DEFAULT.to_vec()
+            } else {
+                group_by.into_iter().map(Into::into).collect()
+            };
             let data = skiagram_core::analysis::flame::fold(
                 &sessions,
                 &filter,
                 adapter.id(),
                 metric.into(),
+                &dims,
                 &pricing,
             );
             if data.stacks.is_empty() {
