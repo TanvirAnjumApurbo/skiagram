@@ -1,0 +1,59 @@
+# Custom dist publish job, referenced by `publish-jobs = [..., "./npm"]` in
+# dist-workspace.toml. It REPLACES dist's built-in npm publish (the npm package is
+# still BUILT by dist because "npm" stays in `installers`).
+#
+# Why this exists: cargo-dist 0.32.0's generated npm installer (binary-install.js)
+# extracts the Windows .zip via `powershell.exe ... Expand-Archive` WITHOUT
+# `-ExecutionPolicy Bypass`, and it ignores Expand-Archive's exit status. On a Windows
+# machine whose PowerShell execution policy is Restricted, Microsoft.PowerShell.Archive
+# cannot load, so extraction silently fails -- yet the installer still prints
+# "has been installed!" and exits 0. `npm i -g skiagram` / `npx skiagram` then fail
+# with ENOENT on the missing binary. (Verified against the published 0.1.0 package;
+# upstream `main` is unchanged, so there is no newer dist to bump to.)
+#
+# winget and Scoop both require the .zip, so we cannot switch the archive format.
+# Instead we patch the generated installer to (1) pass -ExecutionPolicy Bypass so the
+# Archive module loads, and (2) surface extraction errors instead of masking them,
+# then publish the patched package. The patch is verified to apply (the build fails
+# loudly if the upstream template ever changes out from under it).
+name: npm
+
+on:
+  workflow_call:
+    inputs:
+      plan:
+        required: true
+        type: string
+
+jobs:
+  npm:
+    runs-on: ubuntu-latest
+    env:
+      PLAN: ${{ inputs.plan }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20.x"
+          registry-url: "https://registry.npmjs.org"
+      - name: Patch dist's npm installer (Windows zip extraction) and publish
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag=$(echo "$PLAN" | jq -r '.announcement_tag')
+          pkg=$(echo "$PLAN" | jq -r '.releases[].artifacts[] | select(endswith("-npm-package.tar.gz"))' | head -n1)
+          echo "Downloading $pkg from release $tag ..."
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "$pkg"
+          tar xf "$pkg"
+          # --- the fix (see file header) ---
+          sed -i 's/"-NoProfile",/"-NoProfile", "-ExecutionPolicy", "Bypass",/' package/binary-install.js
+          sed -i 's/Expand-Archive -LiteralPath \$LiteralPath -DestinationPath \$DestinationPath -Force/try { & } catch { Write-Error $_; exit 1 }/' package/binary-install.js
+          # Fail the release if the patch didn't apply (e.g. a future dist changed the template).
+          grep -q '"-ExecutionPolicy", "Bypass"' package/binary-install.js \
+            || { echo "ERROR: -ExecutionPolicy Bypass patch did not apply; aborting npm publish."; exit 1; }
+          echo "Patched installer extraction lines:"
+          grep -nE 'ExecutionPolicy|Expand-Archive' package/binary-install.js
+          ( cd package && npm publish --access public )
+          echo "npm publish complete."

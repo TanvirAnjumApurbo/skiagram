@@ -13,6 +13,8 @@ installers = ["shell", "powershell", "homebrew", "npm"]
 targets = ["aarch64-apple-darwin", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", "x86_64-pc-windows-msvc"]
 # A GitHub repo to push Homebrew formulas to
 tap = "TanvirAnjumApurbo/homebrew-tap"
-# Publish jobs to run in CI. "./crates-io" is a custom local workflow
-# (.github/workflows/crates-io.yml) that publishes skiagram-core then skiagram.
-publish-jobs = ["homebrew", "npm", "./crates-io"]
+# Publish jobs to run in CI. "./crates-io" and "./npm" are custom local workflows
+# (.github/workflows/{crates-io,npm}.yml). "./npm" replaces dist's built-in npm
+# publish to patch the generated installer's Windows zip extraction (see npm.yml);
+# the npm package is still BUILT because "npm" stays in `installers` above.
+publish-jobs = ["homebrew", "./npm", "./crates-io"]
